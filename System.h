@@ -1772,7 +1772,22 @@ int ca2(int addr)
 
     return false;
 }
+float nsqrtf(float x) {
+	if (x <= 0.0f)
+		return 0.0f;
+	float result = x;
 
+	result = 0.5f * (result + x / result); // 
+	result = 0.5f * (result + x / result); // 2 
+	result = 0.5f * (result + x / result); // 3
+	result = 0.5f * (result + x / result); // 4 
+	result = 0.5f * (result + x / result); // 5
+	result = 0.5f * (result + x / result); // 6 
+	result = 0.5f * (result + x / result); // 7 
+	result = 0.5f * (result + x / result); // 9 
+	result = 0.5f * (result + x / result); // 10
+	return result;
+}
 unsigned int seed;
 // Generates a pseudo-random integer in the range [0, RAND_MAX]
 int random() {
