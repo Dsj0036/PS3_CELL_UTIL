@@ -262,6 +262,7 @@ int is_char_letter(char c)
 	return true;
 }
 #define GetPointer(X) *(int*)(X)
+
 typedef unsigned char byte;
 typedef unsigned char BYTE;
 typedef unsigned char* PBYTE;
@@ -514,7 +515,11 @@ char* _strtok(char* str, const char* delimiter) {
 
 	return tokenStart;
 }
-// 
+
+
+
+
+
 void splitAndRetrieve(const char* input, char* result) {
 	int i = 0;
 
@@ -735,7 +740,7 @@ namespace HTTP
 
 	void SendRequest(char* url, char* retBuffer, int bufMaxLen) //url = url to request ("http://www.google.com/")    | retBuffer = ptr where the answer will be written to  | bufMaxLen = Max length of the buffer
 	{
-		if (bufMaxLen > 0x6000) { return; } //ERROR, bufMaxLen is TOO BIG
+		if (bufMaxLen > 0x4000) { return; } //ERROR, bufMaxLen is TOO BIG
 
 		CellHttpClientId client = 0;
 		CellHttpTransId trans = 0;
@@ -752,77 +757,30 @@ namespace HTTP
 
 		serverName = url;  //set url
 		memFree(r_buffer, bufMaxLen);
+		
 		sys_net_initialize_network(); //init network
 		httpPool = (void*)HTTP_POOL_BUFFER; //address to: 0x10000 free bytes
-
-		if (httpPool == NULL)
-		{
-			ret = -1;
-			goto end;
-		}
-
-		ret = cellHttpInit(httpPool, HTTP_POOL_SIZE);
-		if (ret < 0)
-		{
-			goto end;
-		}
-
-		ret = cellHttpCreateClient(&client);
-		if (ret < 0)
-		{
-			goto end;
-		}
-
-		ret = cellHttpUtilParseUri(NULL, serverName, NULL, 0, &poolSize);
-		if (ret < 0)
-		{
-			goto end;
-		}
-
+		cellHttpInit(httpPool, HTTP_POOL_SIZE);
+		cellHttpCreateClient(&client);
+		cellHttpUtilParseUri(NULL, serverName, NULL, 0, &poolSize);
 		char uriPoolAlloc[0x1024]; //allocate some space for the uri (a bit too much but eh)
 		uriPool = uriPoolAlloc;
-		if (NULL == uriPool)
-		{
-			goto end;
-		} //fail
-
-		ret = cellHttpUtilParseUri(&uri, serverName, uriPool, poolSize, NULL);
-		if (ret < 0)
-		{
-			memFree((char*)uriPool, sizeof(uriPool));
-			goto end;
-		}
-
-		ret = cellHttpCreateTransaction(&trans, client, CELL_HTTP_METHOD_GET, &uri);
-		memFree((char*)uriPool, sizeof(uriPool));
-
-		if (ret < 0)
-		{
-			goto end;
-		}
+		cellHttpUtilParseUri(&uri, serverName, uriPool, poolSize, NULL);
+		cellHttpCreateTransaction(&trans, client, CELL_HTTP_METHOD_GET, &uri);
 
 		ret = cellHttpSendRequest(trans, NULL, 0, NULL); //send it :D
 		{//make a new scope for the status
 			int code = 0;
 			ret = cellHttpResponseGetStatusCode(trans, &code);
-			if (ret < 0)
-			{
-				goto end;
-			}
-
 		}//end of status scope
 
-		ret = cellHttpResponseGetContentLength(trans, &length);
+		cellHttpResponseGetContentLength(trans, &length);
 
 		if (ret < 0)
 		{
 			if (ret == CELL_HTTP_ERROR_NO_CONTENT_LENGTH)
 			{
 				has_cl = false;
-			}
-			else
-			{
-				goto end;
 			}
 		}
 
@@ -831,8 +789,6 @@ namespace HTTP
 		while ((!has_cl) || (recvd < length))
 		{
 			ret = cellHttpRecvResponse(trans, r_buffer, bufMaxLen - 1, &localRecv);
-			if (ret < 0) { goto end; }
-			else if (localRecv == 0) break;
 			recvd += localRecv;
 			r_buffer[localRecv] = '\0'; //null terminate it
 		}
@@ -844,20 +800,14 @@ namespace HTTP
 			}
 		}  //OUTPUT
 
-		// shutdown procedures
-	end:
-		if (trans)
-		{
-			cellHttpDestroyTransaction(trans);
-			trans = 0;
-		}
+		cellHttpDestroyTransaction(trans);
+		trans = 0;
 
-		if (client)
-		{
-			cellHttpDestroyClient(client); client = 0;
-		}
 
-		cellHttpEnd();  //END OF HTTP
+		cellHttpDestroyClient(client); client = 0;
+
+
+		cellHttpEnd();
 
 		if (httpPool)
 		{
@@ -1190,7 +1140,10 @@ bool endsWith(const char* str, const char* suffix) {
 	// If we reached this point, the suffix matches the end of the string
 	return true;
 }
+void restart_ps3() {
 
+	system_call_3(379, 0x8201, NULL, 0);
+}
 bool containsAlphanumeric(const char* str) {
 	while (*str) {
 		if (isAlphanumeric(*str) != 0) {
@@ -1218,6 +1171,25 @@ bool getBool(int intVal)
 {
 	int getOfs = getMemOfs + getMemInterval * intVal;
 	return *(bool*)getOfs + 3;
+}
+
+long yearToMilliseconds(int year) {
+	return (year - 1970) * 365 * 24 * 60 * 60 * 1000;
+}
+
+long monthToMilliseconds(int month) {
+	return (month - 1) * 30 * 24 * 60 * 60 * 1000;
+}
+long datetimeToTimestamp(int year, int month, int day, int hour, int minute, int second) {
+	long milliseconds = 0;
+	milliseconds += yearToMilliseconds(year);
+	milliseconds += monthToMilliseconds(month);
+	milliseconds += (day - 1) * 24 * 60 * 60 * 1000;
+	milliseconds += hour * 60 * 60 * 1000;
+	milliseconds += minute * 60 * 1000;
+	milliseconds += second * 1000;
+
+	return milliseconds;
 }
 
 //Console Commands
@@ -1421,59 +1393,17 @@ namespace ps3
 	}
 };
 
-namespace NyTekCFW
-{
-	typedef unsigned char byte;
-	typedef char* String;
-	typedef void* DWORD;
-	typedef void* PVOID;
-	char byteArrayz[0x10];
-	void sleep(usecond_t time)
-	{
-		sys_timer_usleep(time * 1000);
+char* longToHexString(long number) {
+	int numChars = sizeof(long) * 2;
+	char hexString[32];
+	for (int i = numChars - 1; i >= 0; --i) {
+		int digit = number & 0xF;
+		hexString[i] = (digit < 10) ? ('0' + digit) : ('A' + digit - 10);
+		number >>= 4;
 	}
-	char* ReadBytes(int address, int length)
-	{
-		for (int i = 0; i < length; i++)
-		{
-			byteArrayz[i] = *(char*)(address + (i));
-		}
-		return byteArrayz;
-	}
-	void WriteBytes(int address, char* input, int length)
-	{
-		for (int i = 0; i < length; i++)
-		{
-			*(char*)(address + (i)) = input[i];
-		}
-	}
-	void WriteString(int off, char* tct)
-	{
-		int strlength = strlen(tct);
-		*(char**)off = tct;
-		WriteBytes(off, ReadBytes(*(int*)off, strlength), strlength);
-		*(byte*)(off + strlength) = 0;
-	}
-	void Zone(int Offset, float Zoned[])
-	{
-		*(float*)Offset = Zoned[0];
-		*(float*)(Offset + 4) = Zoned[1];
-		*(float*)(Offset + 8) = Zoned[2];
-	}
+	hexString[numChars] = '\0';
 
-	int FloatToHex(float value)
-	{
-		float f = value;
-		int i = *(reinterpret_cast<int*>(&f));
-		return i;
-	}
-
-	int IntToHex(int value)
-	{
-		int i = value;
-		int result = *(reinterpret_cast<int*>(&i));
-		return result;
-	}
+	return hexString;
 }
 
 void patcher(int Address, int Destination, bool Linked)
@@ -1532,13 +1462,6 @@ void hookfunction(uint32_t functionStartAddress, uint32_t newFunction, uint32_t 
 	log_f(" appending local func (%x).\n", newFunction);
 	PATCHES_COUNT++;
 }
-void WriteMemory(char address, char value)
-{
-	char HEX[] = { NyTekCFW::IntToHex(value) };
-	sys_dbg_write_process_memory(address, &HEX, sizeof(HEX));
-	sys_dbg_write_process_memory_ps3mapi(address, &HEX, sizeof(HEX));
-}
-
 
 void StubGameRender(uint32_t r3, uint32_t r4)
 {
@@ -1743,35 +1666,62 @@ int ca2(int addr)
 	}
 }bool strcont(char* w1, char* w2)
 {
+	int i = 0;
+	int j = 0;
+	if (_sys_strlen(w1) == 0 || _sys_strlen(w2) == 0)
+	{
+		return false;
+	}
+	while (w1[i] != '\0')
+	{
+		if (w1[i] == w2[j])
+		{
+			int init = i;
+			while (w1[i] == w2[j] && w2[j] != '\0')
+			{
+				j++;
+				i++;
+			}
+
+			if (w2[j] == '\0')
+			{
+				return true;
+			}
+			j = 0;
+		}
+
+		i++;
+	}
+
+	return false;
+}
+
+int atoi(const char* str) {
+    int result = 0;
+    int sign = 1;
     int i = 0;
-    int j = 0;
-    if (_sys_strlen(w1) == 0 || _sys_strlen(w2) == 0)
-    {
-        return false;
-    }
-    while (w1[i] != '\0')
-    {
-        if (w1[i] == w2[j])
-        {
-            int init = i;
-            while (w1[i] == w2[j] && w2[j] != '\0')
-            {
-                j++;
-                i++;
-            }
 
-            if (w2[j] == '\0')
-            {
-                return true;
-            }
-            j = 0;
-        }
+    // Skip leading whitespace
+    while (str[i] == ' ')
+        i++;
 
+    // Check for sign
+    if (str[i] == '-') {
+        sign = -1;
+        i++;
+    } else if (str[i] == '+') {
         i++;
     }
 
-    return false;
+    // Convert digits to integer
+    while (str[i] >= '0' && str[i] <= '9') {
+        result = result * 10 + (str[i] - '0');
+        i++;
+    }
+
+    return sign * result;
 }
+
 float nsqrtf(float x) {
 	if (x <= 0.0f)
 		return 0.0f;
@@ -1787,6 +1737,29 @@ float nsqrtf(float x) {
 	result = 0.5f * (result + x / result); // 9 
 	result = 0.5f * (result + x / result); // 10
 	return result;
+}
+char* interaddrToStr(unsigned int ip) {
+	char* ipString = new char[16];
+	sprintf(ipString, "%u.%u.%u.%u",
+		(ip >> 24) & 0xFF,
+		(ip >> 16) & 0xFF,
+		(ip >> 8) & 0xFF,
+		ip & 0xFF);
+
+	return ipString;
+}
+
+const char* nat_to_str(uint8_t nat) {
+	if (nat == 0) {
+		return "Open";
+	}
+	else if (nat == 1) {
+		return "Moderate";
+	}
+	else if (nat == 2) {
+		return "Badly";
+	}
+	else return "Unavailable";
 }
 unsigned int seed;
 // Generates a pseudo-random integer in the range [0, RAND_MAX]
@@ -1838,7 +1811,7 @@ void* operator new[](std::size_t size, const _STD nothrow_t&)  // allocate array
 			{
 				return operator new(size, align);
 			}
-			void operator delete(void* mem) _THROW0()  // delete allocated storage
+			void operator delete(void* mem) //_THROW0()  // delete allocated storage
 			{
 				_sys_free(mem);
 			}
@@ -1915,3 +1888,79 @@ void* operator new[](std::size_t size, const _STD nothrow_t&)  // allocate array
 									value = s;
 								}
 							};
+							template <typename T>
+							struct Node {
+								T data;
+								Node* next;
+
+								Node(T value) : data(value), next(nullptr) {}
+							};
+							template <typename T>
+							class LinkedList {
+							private:
+								Node<T>* head;
+
+							public:
+								LinkedList() : head(nullptr) {}
+
+								~LinkedList() {
+									Node<T>* current = head;
+									while (current != nullptr) {
+										Node<T>* temp = current;
+										current = current->next;
+										_sys_free(temp);
+									}
+								}
+
+								void append(T value) {
+									Node<T>* newNode = (Node<T>*)_sys_malloc(sizeof(Node<T>));
+									if (head == nullptr) {
+										head = newNode;
+									}
+									else {
+										Node<T>* current = head;
+										while (current->next != nullptr) {
+											current = current->next;
+										}
+										current->next = newNode;
+									}
+								}
+								int where(bool(*foo)(T&)) {
+									if (head == nullptr) {
+										return -1;
+									}
+									else if (head->next == nullptr) {
+										return -1;
+									}
+									else {
+										int index = 0;
+										Node<T>* current = head;
+										while (current->next != nullptr) {
+											if (foo(current->data)) {
+												return index;
+											}
+											current = current->next;
+											index++;
+										}
+										return -1;
+									}
+								}
+								void deleteLast() {
+									if (head == nullptr) {
+										return;
+									}
+									else if (head->next == nullptr) {
+										_sys_free(head);
+										head = nullptr;
+									}
+									else {
+										Node<T>* current = head;
+										while (current->next->next != nullptr) {
+											current = current->next;
+										}
+										_sys_free(current->next);
+										current->next = nullptr;
+									}
+								}
+							};
+
