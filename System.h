@@ -91,10 +91,7 @@ float get_decimal(float number) {
 	return decimal;
 }
 int timecode_to_frames(int fps, int h, int m, int s){
-	int seconds = (m * 60) + (h * 3600);
-	seconds += s;
-	seconds /= fps;
-	return seconds;
+	return (h * fps * 3600) + (m * fps * 60) + (s * fps);
 }
 int format_float(char* buffer, float v) {
 	const int factor = 100000;
@@ -146,6 +143,7 @@ struct interval
 		elapsed++;
 		return false;
 	}
+	interval(short max) { this->max = max; };
 };
 
 int PATCHES_COUNT = 0;
@@ -406,15 +404,15 @@ double min(double a, double b) {
 double max(double a, double b) {
 	return a > b ? a : b > a ? b : a;
 }
-void* free_local(void* ptr, size_t sz) {
+void* zero(void* ptr, size_t sz) {
 	return (void*)_sys_memset(ptr, 0, sz);
 }
 
-void* free_local(const void* ptr, size_t sz) {
+void* zero(const void* ptr, size_t sz) {
 	return (void*)_sys_memset((void*)ptr, 0, sz);
 }
 
-char* free_local(char* ptr) {
+char* zero(char* ptr) {
 	return (char*)_sys_memset(ptr, 0, _sys_strlen(ptr));
 	
 }
