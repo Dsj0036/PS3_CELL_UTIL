@@ -44,10 +44,80 @@
 #include <cell/http.h>
 #include <netex/net.h>
 #include "cell/cell_fs.h"
-#include <../PS3_CELL_UTIL/Imports.h>
 #include <../PS3_CELL_UTIL/Interop.h>
+#include "cell/pad.h"
+typedef char byte;
 
+#define GetPointer(X) *(int*)(X)
 
+typedef unsigned char BYTE;
+typedef unsigned char* PBYTE;
+typedef void VOID;
+typedef void* PVOID;
+typedef unsigned int uint;
+typedef uint32_t uint32;
+typedef uint64_t uint64;
+typedef uint32_t* uintaddr;
+template <class T>
+class collection
+{
+private:
+	T col[10];
+	short count = -1;
+public:
+	collection<T>() {
+
+	}
+	T add(T s) {
+		if (get_count() >= 9) {
+			return NULL;
+		}
+		count++;
+		col[count] = s;
+	}
+	short get_count() {
+		return count + 1;
+	}
+	T at(short s) {
+		return T[s];
+	}
+	T operator+=(T s) { return add(T); }
+	int operator [] (short i) { return H[i]; }
+};
+float get_decimal(float number) {
+	int integerPart = static_cast<int>(number);
+	float fractional = number - integerPart;
+	float decimal = fractional * 10;
+	return decimal;
+}
+int timecode_to_frames(int fps, int h, int m, int s){
+	int seconds = (m * 60) + (h * 3600);
+	seconds += s;
+	seconds /= fps;
+	return seconds;
+}
+int format_float(char* buffer, float v) {
+	const int factor = 100000;
+	int value = static_cast<int>(v * factor + 0.5f);
+	int a = value / 10000;
+	int b = (value / 1000) % 10;
+	int c = (value / 100) % 10;
+	int d = (value / 10) % 10;
+	int e = value % 10;
+	return _sys_snprintf(buffer, 32, "%d.%d%d%d%d%d", a, b, c, d, e);
+}
+template <typename T>
+short count(T* pointer, uint len) {
+	char i = 0;
+	short c = 0;
+	while (i < len) {
+		if (*(pointer + i) != 0) {
+			c++;
+		}
+		i++;
+	}
+	return c;
+}
 #pragma once
 void formatTime(char* buffer, size_t bufferSize, int hours, int minutes, int seconds) {
 	snprintf(buffer, bufferSize, "%02d:%02d:%02d", hours, minutes, seconds);
@@ -63,12 +133,61 @@ const char* getAMPM(int hour) {
 		return "Invalid Hour";  // Return an error string for invalid input
 	}
 }
+struct interval
+{
+	short max;
+	short elapsed;
+	void (*callback)()=nullptr;
+	bool tick() {
+		if (elapsed == max) {
+			elapsed = 0;
+			return true;
+		}
+		elapsed++;
+		return false;
+	}
+};
+
 int PATCHES_COUNT = 0;
 
 template <class TYPE_A>
 inline bool is(TYPE_A a, TYPE_A b) {
 	return a == b;
 }
+class repeating{
+	uint variants[10];
+	short filler_index = 0;
+	bool checkIfHaves(uint value, short index = 0) {
+		if (variants[index] == value) {
+			return true;
+		}
+		else if ((index +1) < 10)
+		{
+			if (checkIfHaves(value, index + 1)) {
+				return true;
+			}
+		}
+	}
+	void add_flag(uint value) {
+		if (filler_index < 10) {
+			variants[filler_index] = value;
+			filler_index++;
+		}
+	}
+	void update(uint newOrExistent) {
+		if (!checkIfHaves(newOrExistent)) {
+			add_flag(newOrExistent);
+		}
+		
+	}
+	// This is better than a FOR
+	void clear(short index) {
+		variants[index] = 0;
+		if (index < 10&&index > -1) {
+			clear(index + 1);
+		}
+	}
+};
 
 inline char* raw(std::string s) {
 	return  &s[0];
@@ -89,6 +208,7 @@ void removeWord(char* str, const char* wordToRemove) {
 		}
 	}
 }
+// Target address of function, return type, function name, arguments.
 #define MAKE_FN(address, return_type, func_name, args) \
     uint32_t func_name##opd[2] = { address, 0x014CDAB0 }; \
     using func_name##_t = return_type(*)args; \
@@ -107,23 +227,57 @@ size_t len(const char* str) {
 	}
 	return length;
 }
+
+void increase(short &i, short limit) {
+	short soon = i + 1;
+	if (soon >= limit) {
+		i = 0;
+		return;
+	}
+	else if (soon < -1)
+	{
+		i = 0;
+	}
+	else
+	{
+		i += i;
+	}
+}
+void increase(short& i, short value, short limit) {
+	short soon = i + value;
+	if (soon >= limit) {
+		i = 0;
+		return;
+	}
+	else if (soon < -1)
+	{
+		i = 0;
+	}
+	else
+	{
+		i += i;
+	}
+}
 char* createUserIdString(int userId) {
-	// Crear un arreglo de caracteres inicializado con "00000000"
 	char cadena[] = "00000000";
 
-	// Valor entero que deseas insertar al final
-	// Puedes cambiar esto por el valor que desees
-
-	// Convertir el valor entero a una cadena
-	char valor_str[20];  // Suficientemente grande para contener cualquier entero
+	char valor_str[20];  
 	sprintf(valor_str, "%d", userId);
 
-	// Calcular la longitud de la cadena original
 	size_t longitud_original = strlen(cadena);
 
-	// Copiar la cadena del valor al final de la cadena original
 	strncpy(cadena + longitud_original - strlen(valor_str), valor_str, strlen(valor_str));
 	return cadena;
+}
+char* createUserIdString(char* buffer, int userId) {
+
+	char valor_str[20];
+	sprintf(valor_str, "%d", userId);
+
+	size_t longitud_original = strlen(buffer);
+
+	_sys_strncpy(buffer + longitud_original - strlen(valor_str), valor_str, strlen(valor_str));
+	return buffer;
 }
 char* cat(char* destination, const char* source) {
 	char* result = destination;
@@ -145,6 +299,18 @@ char* cat(char* destination, const char* source) {
 
 	return result;
 }
+template <typename ... Arguments>
+// mallocd
+char* format(const char* format, Arguments... s) {
+	short len = _sys_strlen(format);
+	short buffSz = len < 8 ? 8 : len < 16 ? 16 : len < 32 ? 32 : len < 64 ? 64 : len < 78 ? 78 : len < 86 ? 86 : len < 120 ? 120 :128;
+	char * buff = (char*)malloc(buffSz);
+	snprintf(buff, buffSz, format, s...);
+	return buff;
+}
+short ctoi(char v) {
+	return v - '0';
+}
 int ca(int a) {
 	return a;
 }
@@ -162,7 +328,13 @@ unsigned char hexCharToNibble(char c) {
 		return 0; // Invalid hex character
 	}
 }
-
+void add_json_property(std::string& json, char* propertyName, char* propertyValue){
+	json += "\"";
+	json += propertyName;
+	json += "\":\"";
+	json += propertyValue;
+	json += "\"\n";
+}
 unsigned int hexToUInt(const char* hexString) {
 	unsigned int result = 0;
 	while (*hexString) {
@@ -170,6 +342,32 @@ unsigned int hexToUInt(const char* hexString) {
 		hexString++;
 	}
 	return result;
+}
+
+int atoint(const char* str) {
+    int result = 0;
+    int sign = 1;
+    int i = 0;
+
+    // Skip leading whitespace
+    while (str[i] == ' ')
+        i++;
+
+    // Check for sign
+    if (str[i] == '-') {
+        sign = -1;
+        i++;
+    } else if (str[i] == '+') {
+        i++;
+    }
+
+    // Convert digits to integer
+    while (str[i] >= '0' && str[i] <= '9') {
+        result = result * 10 + (str[i] - '0');
+        i++;
+    }
+
+    return sign * result;
 }
 
 void hexstr_to_rgb(const char* hexString, int& r, int& g, int& b) {
@@ -201,6 +399,26 @@ int length(char* s) {
 	}
 	return len;
 }
+double min(double a, double b) {
+	return a > b ? b : b < a ? a : b;
+}
+
+double max(double a, double b) {
+	return a > b ? a : b > a ? b : a;
+}
+void* free_local(void* ptr, size_t sz) {
+	return (void*)_sys_memset(ptr, 0, sz);
+}
+
+void* free_local(const void* ptr, size_t sz) {
+	return (void*)_sys_memset((void*)ptr, 0, sz);
+}
+
+char* free_local(char* ptr) {
+	return (char*)_sys_memset(ptr, 0, _sys_strlen(ptr));
+	
+}
+
 // Function to remove a word from a string
 bool str_remove_word(char* str, const char* wordToRemove) {
 	bool f = false;
@@ -229,7 +447,7 @@ bool str_remove_word(char* str, const char* wordToRemove) {
 	return f;
 }
 bool strEquals(const char* ptr, const char* is) {
-	return _sys_strcmp(ptr, is) == 0;
+	return _sys_strncmp(ptr, is, _sys_strlen(ptr)) == 0;
 }
 // Function to check if a specific word is present in a char*
 bool str_contain(const char* str, const char* word) {
@@ -261,17 +479,6 @@ int is_char_letter(char c)
 		return false;
 	return true;
 }
-#define GetPointer(X) *(int*)(X)
-
-typedef unsigned char byte;
-typedef unsigned char BYTE;
-typedef unsigned char* PBYTE;
-typedef void VOID;
-typedef void* PVOID;
-typedef unsigned int uint;
-typedef uint32_t uint32;
-typedef uint64_t uint64;
-typedef uint32_t* uintaddr;
 
 char* strstr_custom(const char* haystack, const char* needle) {
 	while (*haystack != '\0') {
@@ -338,70 +545,6 @@ char* str_extract_sub(const char* str, int start, int length) {
 
 	return substring;
 }
-// Formatting
-int _snprintf(char* buffer, size_t size, const char* format, ...) {
-	if (buffer == nullptr || size == 0 || format == nullptr) {
-		return -1;  // Invalid arguments
-	}
-
-	va_list args;
-	va_start(args, format);
-
-	int written = 0;
-	size_t remaining = size;
-
-	while (*format != '\0' && remaining > 1) {
-		if (*format == '%' && *(format + 1) != '\0') {
-			// Handle format specifiers
-			char specifier = *(format + 1);
-
-			switch (specifier) {
-			case 'd': {
-				int value = va_arg(args, int);
-				written += _sys_snprintf(buffer + written, remaining, "%d", value);
-				break;
-			}
-			case 's': {
-				const char* str = va_arg(args, const char*);
-				written += _sys_snprintf(buffer + written, remaining, "%s", str);
-				break;
-			}
-			case 'x':
-			{
-				const char* str = va_arg(args, const char*);
-				written += _sys_snprintf(buffer + written, remaining, "%x", str);
-				break;
-			}
-			// Add more format specifiers as needed
-
-			default:
-				buffer[written++] = *format;
-				break;
-			}
-
-			format += 2;  // Move past the format specifier
-		}
-		else {
-			buffer[written++] = *format;
-			format++;
-		}
-
-		remaining = size - written;
-	}
-
-	va_end(args);
-
-	// Null-terminate the result
-	if (written < size) {
-		buffer[written] = '\0';
-	}
-	else {
-		// Insufficient space, set the last character to null terminator
-		buffer[size - 1] = '\0';
-	}
-
-	return written;
-}
 // Function to find the index of a target character in a string
 int str_index_of(const char* str, char target) {
 	if (str == nullptr) {
@@ -422,10 +565,10 @@ int str_index_of(const char* str, char target) {
 
 	return -1;  // Character not found in the string
 }
-// Compare
+// compare Cstrings, returning differences, -1 if cannot loop.
 int str_compare(const char* str1, const char* str2)
 {
-	int diff = 0;
+	int diff = -1;
 
 	if (*(str1) == 0x00 || *(str2) == 0x00) { return -1; }
 
@@ -1065,9 +1208,9 @@ void reverse(char s[])
 		s[j] = c;
 	}
 }
-
-char itoaBuff[100][100];
+char itoaBuff[12][4];
 char* itoa(int index, int n) {
+	_sys_memset(itoaBuff[index], 0, sizeof(itoaBuff[index]));
 	int i, sign;
 
 	if ((sign = n) < 0)  /* record sign */
@@ -1086,6 +1229,7 @@ char* itoa(int index, int n) {
 void sys_sleep(uint64_t milliseconds)
 {
 	sys_timer_usleep(milliseconds * 1000);
+
 }
 
 
@@ -1462,7 +1606,9 @@ void hookfunction(uint32_t functionStartAddress, uint32_t newFunction, uint32_t 
 	log_f(" appending local func (%x).\n", newFunction);
 	PATCHES_COUNT++;
 }
-
+void hookfunction(uint32_t functionStartAddress, void* newFunction, void* functionStub, const char* id = "") {
+	hookfunction(functionStartAddress, *(uintaddr)newFunction, *(uintaddr)functionStub, id);
+}
 void StubGameRender(uint32_t r3, uint32_t r4)
 {
 	// interop
@@ -1597,9 +1743,10 @@ namespace vector3_parse {
 uint32_t fn(void* f) {
 	return *(uintaddr)f;
 }
-char readStrWide[200];
+char readStrWide[32];
 // 
 char* readWide(uint address, int len = 16) {
+	_sys_memset(readStrWide, 0, 32);
 	int leng = len * 2;
 	int index = 0;
 	for (int i = 0; i < (leng); i += 2) {
@@ -1748,7 +1895,75 @@ char* interaddrToStr(unsigned int ip) {
 
 	return ipString;
 }
+template <class T>
+class node {
+public:
+	node* next;
+	T data;
 
+	bool operator==(const node<T>& otro) const {
+		return this->data == otro.data;
+	}
+	bool operator==(const node<T> otro) const {
+		return this->data == otro.data;
+	}
+	node<T>() {};
+};
+
+template <class T>
+class wire {
+	int count = 0;
+public:
+	node<T> subs;
+	wire<T>() {
+		subs = node<T>();
+		subs.next = nullptr;
+
+	}
+	void add(T data) {
+		node<T>* n = &subs;
+		while (n->next != nullptr) {
+			n = n->next;
+		}
+		n->next = new node<T>();
+		n->next->data = data;
+		count++;
+	}
+
+	void clear() {
+		subs.next = nullptr; 
+		count = 0; 
+	}
+
+	int size() const {
+		int count = 0;
+		node<T>* current = subs.next;
+		while (current != nullptr) {
+			count++;
+			current = current->next;
+		}
+		return count;
+	}
+	bool contains(T v) {
+		node<T>* sub = subs.next;
+		if (sub->data == v) {
+			return true;
+		}
+		else
+		{
+			while (sub->next != nullptr) {
+				if (sub->data == v) {
+					break;
+					return true;
+				}
+				sub = sub->next;
+			}
+		}
+	}
+	int get_count() const {
+		return count;
+	}
+};
 const char* nat_to_str(uint8_t nat) {
 	if (nat == 0) {
 		return "Open";
@@ -1761,6 +1976,83 @@ const char* nat_to_str(uint8_t nat) {
 	}
 	else return "Unavailable";
 }
+// This function will allocate an empty char array for formatting at the specified buffer.
+// Max: 256;
+
+char* stack(char* forBuffer, int & size){
+	short len = _sys_strlen(forBuffer);
+	size = 0;
+	if (len > 0){
+		if (len < 8){
+			char b[12];
+			size = 12;
+			return b;
+		}
+		else if (len >= 8 && len <= 16){
+			
+			char b[18];
+			size = 18;
+			return b;
+		}
+		else if (len >= 16 && len <= 32){
+			
+			char b[34];
+			size = 34;
+			return b;
+		}
+		else if (len >= 32 && len <= 64){
+			
+			char b[68];
+			size = 68;
+			return b;
+		}
+		else if (len >= 64){
+			
+			char b[132];
+			size = 132;
+			return b;
+		}
+	}
+	return nullptr;
+}
+wchar_t* stackW(char* forBuffer, int & size){
+
+	short len = _sys_strlen(forBuffer);
+	size = 0;
+	if (len > 0){
+		if (len < 8){
+			wchar_t b[12];
+			size = 12;
+			return b;
+		}
+		else if (len >= 8 && len <= 16){
+			
+			wchar_t b[18];
+			size = 18;
+			return b;
+		}
+		else if (len >= 16 && len <= 32){
+			
+			wchar_t b[34];
+			size = 34;
+			return b;
+		}
+		else if (len >= 32 && len <= 64){
+			
+			wchar_t b[68];
+			size = 68;
+			return b;
+		}
+		else if (len >= 64){
+			
+			wchar_t b[132];
+			size = 132;
+			return b;
+		}
+	}
+	return nullptr;
+}
+
 unsigned int seed;
 // Generates a pseudo-random integer in the range [0, RAND_MAX]
 int random() {
@@ -1774,6 +2066,9 @@ int random() {
 	// Limit the range to [0, RAND_MAX]
 	return static_cast<int>(seed % (RAND_MAX + 1));
 }
+#define thread_create sys_ppu_thread_create
+#define alloc _sys_malloc
+
 #pragma region OVERRIDE_NEW
 #pragma once
 #include <yvals.h> // for _CSTD
@@ -1886,81 +2181,6 @@ void* operator new[](std::size_t size, const _STD nothrow_t&)  // allocate array
 								}
 								valuable(int s) {
 									value = s;
-								}
-							};
-							template <typename T>
-							struct Node {
-								T data;
-								Node* next;
-
-								Node(T value) : data(value), next(nullptr) {}
-							};
-							template <typename T>
-							class LinkedList {
-							private:
-								Node<T>* head;
-
-							public:
-								LinkedList() : head(nullptr) {}
-
-								~LinkedList() {
-									Node<T>* current = head;
-									while (current != nullptr) {
-										Node<T>* temp = current;
-										current = current->next;
-										_sys_free(temp);
-									}
-								}
-
-								void append(T value) {
-									Node<T>* newNode = (Node<T>*)_sys_malloc(sizeof(Node<T>));
-									if (head == nullptr) {
-										head = newNode;
-									}
-									else {
-										Node<T>* current = head;
-										while (current->next != nullptr) {
-											current = current->next;
-										}
-										current->next = newNode;
-									}
-								}
-								int where(bool(*foo)(T&)) {
-									if (head == nullptr) {
-										return -1;
-									}
-									else if (head->next == nullptr) {
-										return -1;
-									}
-									else {
-										int index = 0;
-										Node<T>* current = head;
-										while (current->next != nullptr) {
-											if (foo(current->data)) {
-												return index;
-											}
-											current = current->next;
-											index++;
-										}
-										return -1;
-									}
-								}
-								void deleteLast() {
-									if (head == nullptr) {
-										return;
-									}
-									else if (head->next == nullptr) {
-										_sys_free(head);
-										head = nullptr;
-									}
-									else {
-										Node<T>* current = head;
-										while (current->next->next != nullptr) {
-											current = current->next;
-										}
-										_sys_free(current->next);
-										current->next = nullptr;
-									}
 								}
 							};
 
