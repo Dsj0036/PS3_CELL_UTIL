@@ -136,7 +136,7 @@ struct interval
 	short elapsed;
 	void (*callback)()=nullptr;
 	bool tick() {
-		if (elapsed == max) {
+		if (elapsed >=max) {
 			elapsed = 0;
 			return true;
 		}
@@ -657,10 +657,6 @@ char* _strtok(char* str, const char* delimiter) {
 	return tokenStart;
 }
 
-
-
-
-
 void splitAndRetrieve(const char* input, char* result) {
 	int i = 0;
 
@@ -752,6 +748,7 @@ char* extractFilename(const char* path) {
 bool isNotWeird(char c) {
 	return c >= 33 && c < 127;
 }
+// cstring is fully alpha numeric.
 bool isNotWeird(char* str) {
 	if (!str) {
 		return false;
@@ -970,10 +967,6 @@ template<typename R, typename... Arguments> inline R Call(long long function, Ar
 	return temp(args...);
 }
 
-uint reintepret_uint(int unsign)
-{
-	return (uint)(unsign);
-}
 char* desreference_stringptr(unsigned int i) {
 	char* s = (char*)i;
 	if (s) {
@@ -1231,20 +1224,6 @@ void sys_sleep(uint64_t milliseconds)
 }
 
 
-
-int getMemOfs = 0x01D00200;
-int getMemInterval = 100;
-char* getChar(int intVal)
-{
-	int getOfs = getMemOfs + getMemInterval * (70 + intVal);
-	return (char*)getOfs;
-}
-
-void setg(int intVal, int value)
-{
-	int getOfs = getMemOfs + getMemInterval * intVal;
-	*(int*)getOfs = value;
-}
 bool isAlphanumeric(char ch) {
 	// Check if the character is an alphanumeric character
 	bool flag = ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'));
@@ -1296,23 +1275,6 @@ bool containsAlphanumeric(const char* str) {
 	}
 	// No alphanumeric characters found
 	return false;
-}
-int g(int intVal)
-{
-	int getOfs = getMemOfs + getMemInterval * intVal;
-	return *(int*)getOfs;
-}
-
-float getFloat(int intVal)
-{
-	int getOfs = getMemOfs + getMemInterval * (50 + intVal);
-	return *(float*)getOfs;
-}
-
-bool getBool(int intVal)
-{
-	int getOfs = getMemOfs + getMemInterval * intVal;
-	return *(bool*)getOfs + 3;
 }
 
 long yearToMilliseconds(int year) {
@@ -1607,32 +1569,6 @@ void hookfunction(uint32_t functionStartAddress, uint32_t newFunction, uint32_t 
 void hookfunction(uint32_t functionStartAddress, void* newFunction, void* functionStub, const char* id = "") {
 	hookfunction(functionStartAddress, *(uintaddr)newFunction, *(uintaddr)functionStub, id);
 }
-void StubGameRender(uint32_t r3, uint32_t r4)
-{
-	// interop
-	__nop(); __nop(); __nop(); __nop(); __nop();
-}
-void GetMemoryInfo()
-{
-	static sys_memory_info stat; size_t* FreeMemory, * UsedMemory; int HeapFree;
-	sys_memory_get_user_memory_size(&stat);
-
-	*FreeMemory = stat.available_user_memory;
-	*FreeMemory += HeapFree;
-	*UsedMemory = stat.total_user_memory - *FreeMemory;
-	const size_t RETAIL_SIZE = 213 * 1024 * 1024;
-	if (stat.total_user_memory > RETAIL_SIZE)
-	{
-		*FreeMemory -= stat.total_user_memory - RETAIL_SIZE;
-	}
-	else
-	{
-		*FreeMemory = 0;
-		*UsedMemory = 0;
-	}
-	return;
-}
-
 char* toSign(int character) {
 	char s[]{ (char)character };
 	return s;
@@ -1643,17 +1579,6 @@ char* sys_append(char* a, char* b) {
 	return inp;
 }
 
-unsigned long djb2Hash(const char* str) {
-	unsigned long hash = 5381;
-	const char* currentChar;
-
-	for (currentChar = str; *currentChar != '\0'; ++currentChar) {
-		hash = ((hash << 5) + hash) + *currentChar; // hash * 33 + currentChar
-	}
-
-	return hash;
-}
-// Destructorrpy
 namespace vector3_parse {
 
 	size_t customStrlen(const char* str) {
@@ -1694,7 +1619,7 @@ namespace vector3_parse {
 		return dest;
 	}
 	int parseVector3(const char* vectorStr, int* x, int* y, int* z) {
-		// Initialize variables
+		// Initialize var
 		*x = *y = *z = 0;
 
 		// Parse x
@@ -1809,7 +1734,8 @@ int ca2(int addr)
 		else
 			return 0x000101C0;
 	}
-}bool strcont(char* w1, char* w2)
+}
+bool strcont(char* w1, char* w2)
 {
 	int i = 0;
 	int j = 0;
@@ -1974,7 +1900,7 @@ const char* nat_to_str(uint8_t nat) {
 	}
 	else return "Unavailable";
 }
-// This function will allocate an empty char array for formatting at the specified buffer.
+// This function will store an empty char array for formatting at the specified buffer.
 // Max: 256;
 
 char* stack(char* forBuffer, int & size){
@@ -2057,8 +1983,6 @@ int random() {
 	// LCG parameters (these values are just examples, and you may need to choose different values for better randomness)
 	const unsigned int a = 1664525;
 	const unsigned int c = 1013904223;
-
-
 	seed = a * seed + c;
 
 	// Limit the range to [0, RAND_MAX]
