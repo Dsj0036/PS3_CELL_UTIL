@@ -47,17 +47,43 @@
 #include <../PS3_CELL_UTIL/Interop.h>
 #include "cell/pad.h"
 typedef char byte;
-
+#define MAX(a, b)			((a) >= (b) ? (a) : (b))
+#define MIN(a, b)			((a) <= (b) ? (a) : (b))
+#define ABS(a)				(((a) < 0) ? -(a) : (a))
+#define RANGE(a, b, c)		((a) <= (b) ? (b) : (a) >= (c) ? (c) : (a))
+#define BETWEEN(a, b, c)	( ((a) <= (b)) && ((b) <= (c)) )
+#define ISDIGIT(a)			( ('0' <= (a)) && ((a) <= '9') )
+#define ISSPACE(a)			( ( 0  <= (a)) && ((a) <= ' ') )
+#define ISHEX(a)			(ISDIGIT(a) || BETWEEN('a', LCASE(a), 'f'))
+#define	INT32(a)			(*((u32*)(a)))
+#define LCASE(a)	(a | 0x20)
 #define GetPointer(X) *(int*)(X)
 
 typedef unsigned char BYTE;
 typedef unsigned char* PBYTE;
 typedef void VOID;
 typedef void* PVOID;
+
+struct point
+{
+	int X;
+	int Y;
+	point Append(point s) {
+		point d{ s.X + X, s.Y + Y };
+		return d;
+	}
+	point Append(int x, int y) {
+		point d{ x + X, y + Y };
+		return d;
+	}
+	point(int x, int y) : X(x), Y(y) {}
+	point(){}
+};
 typedef unsigned int uint;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
 typedef uint32_t* uintaddr;
+typedef uint _DWORD;
 template <class T>
 class collection
 {
@@ -145,6 +171,101 @@ struct interval
 	}
 	interval(short max) { this->max = max; };
 };
+
+static struct platform_info {
+	uint firmware_version;
+} info;
+
+static inline int lv2_get_platform_info(struct platform_info* info)
+{
+	system_call_1(387, (uint)info);
+	return (uint)p1;
+}
+
+static char h2a(const char hex) // hex byte to ascii char
+{
+	char c = (unsigned char)hex;
+	if (BETWEEN(0, c, 9))
+		c += '0'; //'0'-'9'
+	else if (BETWEEN(0xA, c, 0xF))
+		c += 55;  //'A'-'F'
+	return c;
+}
+static uint8_t h2b(const char hex) // hex char to byte
+{
+	uint8_t c = LCASE(hex);
+	if (BETWEEN('0', c, '9'))
+		c -= '0'; // 0-9
+	else if (BETWEEN('a', c, 'f'))
+		c -= 'W'; // 10-15
+	return c;
+}
+static bool islike(const char* param, const char* text)
+{
+	if (!param || !text) return false;
+	while (*text && (*text == *param)) text++, param++;
+	return !*text;
+}
+
+static uint64 convertH(const char* val) // convert hex string to unsigned integer 64bit
+{
+	if (!val || (*val == 0)) return 0;
+
+	uint64 ret = 0; uint8_t n = 0, c;
+
+	if (islike(val, "0x")) n = 2;
+
+	for (uint8_t i = n; i < 16 + n; i++)
+	{
+		if (val[i] == ' ') { n++; continue; }
+
+		c = h2b(val[i]);
+		if (c > 0xF)
+			return ret;
+
+		ret = (ret << 4) | c;
+	}
+
+	return ret;
+}
+
+static uint64 val(const char* c)
+{
+	if (!c) return 0;
+
+	if (islike(c, "0x"))
+	{
+		return convertH((char*)c);
+	}
+
+	uint64 result = 0;
+	uint64 sign = 1;
+
+	if (c && *c == '-')
+	{
+		sign = -1;
+		c++;
+	}
+
+	while (*c)
+	{
+		if (!ISDIGIT(*c)) break;
+
+		result *= 10;
+		result += (*c & 0x0F);
+
+		c++;
+	}
+	return(result * sign);
+}
+
+static float get_firmware_version(void)
+{
+	lv2_get_platform_info(&info);
+	char FW[8]; sprintf(FW, "%02X", info.firmware_version);
+	return (float)(FW[0] & 0x0F) + val(FW + 2) * 0.00001f;
+}
+
 
 int PATCHES_COUNT = 0;
 
@@ -1976,6 +2097,9 @@ wchar_t* stackW(char* forBuffer, int & size){
 	}
 	return nullptr;
 }
+#ifndef null
+#define null 0;
+#endif // !null
 
 unsigned int seed;
 // Generates a pseudo-random integer in the range [0, RAND_MAX]
