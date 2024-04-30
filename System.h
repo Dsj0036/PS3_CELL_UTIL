@@ -46,6 +46,8 @@
 #include "cell/cell_fs.h"
 #include <../PS3_CELL_UTIL/Interop.h>
 #include "cell/pad.h"
+typedef int ref;
+typedef sys_ppu_thread_t thread;
 typedef char byte;
 #define MAX(a, b)			((a) >= (b) ? (a) : (b))
 #define MIN(a, b)			((a) <= (b) ? (a) : (b))
@@ -59,31 +61,80 @@ typedef char byte;
 #define LCASE(a)	(a | 0x20)
 #define GetPointer(X) *(int*)(X)
 
+enum THREAD_PRIORITY
+{
+	LOWEST = 3000,
+	BELOW_NORMAL = 2400,
+	LOW = 2000,
+	NORMAL = 1500,
+	ABOVE_NORMAL = 1000,
+	REAL_TIME = 500,
+	ALL = 0,
+
+};
+
+struct point
+{
+public:
+	point() {  }
+	point(int x, int y) : X(x), Y(y) {
+	}
+	point(bool isBoolean) { if (isBoolean) { X = 0; Y = 1; } }
+	int X{ 0 };
+	int Y{ 0 };
+	point Append(int x, int y)
+	{
+		return point(X + x, Y + y);
+	}
+	point Append(point increment) {
+		return point(X + increment.X, Y + increment.Y);
+	}
+	uint32_t* Unsigned() {
+		uint32_t v[2]
+		{ uint32_t(X), uint32_t(Y) };
+		return v;
+	}
+	bool operator == (point alt) {
+		return alt.X == X && alt.Y == Y;
+	}
+};
+char memory(unsigned int offset) {
+	return *(unsigned char*)offset;
+}
+
 typedef unsigned char BYTE;
 typedef unsigned char* PBYTE;
 typedef void VOID;
 typedef void* PVOID;
 
-struct point
-{
-	int X;
-	int Y;
-	point Append(point s) {
-		point d{ s.X + X, s.Y + Y };
-		return d;
+
+int toInt(float input) {
+	bool negative = input < 0.0f;
+	if (negative) input *= -1.0f;
+
+	uint32_t output = static_cast<uint32_t>(input);
+	if (negative) {
+		output -= 0x80000000;
+		output = 0x80000000 - output;
+		output -= 1;
 	}
-	point Append(int x, int y) {
-		point d{ x + X, y + Y };
-		return d;
-	}
-	point(int x, int y) : X(x), Y(y) {}
-	point(){}
-};
+
+	return output;
+}
+
+float toFloat(int input) {
+	bool negative = 0 > input;
+	unsigned int output_tmp = negative ? -input : input;
+	float output = static_cast<float>(output_tmp);
+	return negative ? -output : output;
+}
+typedef unsigned char uchar;
 typedef unsigned int uint;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
 typedef uint32_t* uintaddr;
 typedef uint _DWORD;
+typedef uint address;
 template <class T>
 class collection
 {
@@ -116,7 +167,7 @@ float get_decimal(float number) {
 	float decimal = fractional * 10;
 	return decimal;
 }
-int timecode_to_frames(int fps, int h, int m, int s){
+int timecode_to_frames(int fps, int h, int m, int s) {
 	return (h * fps * 3600) + (m * fps * 60) + (s * fps);
 }
 int format_float(char* buffer, float v) {
@@ -141,6 +192,9 @@ short count(T* pointer, uint len) {
 	}
 	return c;
 }
+bool is_within_range(int r, int range) {
+	return abs(r) < range;
+}
 #pragma once
 void formatTime(char* buffer, size_t bufferSize, int hours, int minutes, int seconds) {
 	snprintf(buffer, bufferSize, "%02d:%02d:%02d", hours, minutes, seconds);
@@ -160,9 +214,9 @@ struct interval
 {
 	short max;
 	short elapsed;
-	void (*callback)()=nullptr;
+	void (*callback)() = nullptr;
 	bool tick() {
-		if (elapsed >=max) {
+		if (elapsed >= max) {
 			elapsed = 0;
 			return true;
 		}
@@ -181,7 +235,30 @@ static inline int lv2_get_platform_info(struct platform_info* info)
 	system_call_1(387, (uint)info);
 	return (uint)p1;
 }
-
+static char* buffer(int a) {
+	char buff[1]{ a };
+	return buff;
+}
+static char* buffer2(int a, int b) {
+	char buff[2]{ a,b };
+	return buff;
+}
+static char* buffer3(int a, int b, int c) {
+	char buff[3]{ a,b, c };
+	return buff;
+}
+static char* buffer4(int a, int b, int c, int d) {
+	char buff[4]{ a,b,c, d };
+	return buff;
+}
+static char* buffer5(int a, int b, int c, int d, int e) {
+	char buff[5]{ a,b, c,d, e };
+	return buff;
+}
+static char* buffer6(int a, int b, int c, int d, int e, int f) {
+	char buff[6]{ a,b, c,d,e,f };
+	return buff;
+}
 static char h2a(const char hex) // hex byte to ascii char
 {
 	char c = (unsigned char)hex;
@@ -273,14 +350,14 @@ template <class TYPE_A>
 inline bool is(TYPE_A a, TYPE_A b) {
 	return a == b;
 }
-class repeating{
+class repeating {
 	uint variants[10];
 	short filler_index = 0;
 	bool checkIfHaves(uint value, short index = 0) {
 		if (variants[index] == value) {
 			return true;
 		}
-		else if ((index +1) < 10)
+		else if ((index + 1) < 10)
 		{
 			if (checkIfHaves(value, index + 1)) {
 				return true;
@@ -297,12 +374,12 @@ class repeating{
 		if (!checkIfHaves(newOrExistent)) {
 			add_flag(newOrExistent);
 		}
-		
+
 	}
 	// This is better than a FOR
 	void clear(short index) {
 		variants[index] = 0;
-		if (index < 10&&index > -1) {
+		if (index < 10 && index > -1) {
 			clear(index + 1);
 		}
 	}
@@ -347,7 +424,7 @@ size_t len(const char* str) {
 	return length;
 }
 
-void increase(short &i, short limit) {
+void increase(short& i, short limit) {
 	short soon = i + 1;
 	if (soon >= limit) {
 		i = 0;
@@ -380,7 +457,7 @@ void increase(short& i, short value, short limit) {
 char* createUserIdString(int userId) {
 	char cadena[] = "00000000";
 
-	char valor_str[20];  
+	char valor_str[20];
 	sprintf(valor_str, "%d", userId);
 
 	size_t longitud_original = strlen(cadena);
@@ -422,8 +499,8 @@ template <typename ... Arguments>
 // mallocd
 char* format(const char* format, Arguments... s) {
 	short len = _sys_strlen(format);
-	short buffSz = len < 8 ? 8 : len < 16 ? 16 : len < 32 ? 32 : len < 64 ? 64 : len < 78 ? 78 : len < 86 ? 86 : len < 120 ? 120 :128;
-	char * buff = (char*)malloc(buffSz);
+	short buffSz = len < 8 ? 8 : len < 16 ? 16 : len < 32 ? 32 : len < 64 ? 64 : len < 78 ? 78 : len < 86 ? 86 : len < 120 ? 120 : 128;
+	char* buff = (char*)malloc(buffSz);
 	snprintf(buff, buffSz, format, s...);
 	return buff;
 }
@@ -447,7 +524,7 @@ unsigned char hexCharToNibble(char c) {
 		return 0; // Invalid hex character
 	}
 }
-void add_json_property(std::string& json, char* propertyName, char* propertyValue){
+void add_json_property(std::string& json, char* propertyName, char* propertyValue) {
 	json += "\"";
 	json += propertyName;
 	json += "\":\"";
@@ -464,29 +541,30 @@ unsigned int hexToUInt(const char* hexString) {
 }
 
 int atoint(const char* str) {
-    int result = 0;
-    int sign = 1;
-    int i = 0;
+	int result = 0;
+	int sign = 1;
+	int i = 0;
 
-    // Skip leading whitespace
-    while (str[i] == ' ')
-        i++;
+	// Skip leading whitespace
+	while (str[i] == ' ')
+		i++;
 
-    // Check for sign
-    if (str[i] == '-') {
-        sign = -1;
-        i++;
-    } else if (str[i] == '+') {
-        i++;
-    }
+	// Check for sign
+	if (str[i] == '-') {
+		sign = -1;
+		i++;
+	}
+	else if (str[i] == '+') {
+		i++;
+	}
 
-    // Convert digits to integer
-    while (str[i] >= '0' && str[i] <= '9') {
-        result = result * 10 + (str[i] - '0');
-        i++;
-    }
+	// Convert digits to integer
+	while (str[i] >= '0' && str[i] <= '9') {
+		result = result * 10 + (str[i] - '0');
+		i++;
+	}
 
-    return sign * result;
+	return sign * result;
 }
 
 void hexstr_to_rgb(const char* hexString, int& r, int& g, int& b) {
@@ -535,7 +613,7 @@ void* zero(const void* ptr, size_t sz) {
 
 char* zero(char* ptr) {
 	return (char*)_sys_memset(ptr, 0, _sys_strlen(ptr));
-	
+
 }
 
 // Function to remove a word from a string
@@ -565,8 +643,17 @@ bool str_remove_word(char* str, const char* wordToRemove) {
 	}
 	return f;
 }
-bool strEquals(const char* ptr, const char* is) {
-	return _sys_strncmp(ptr, is, _sys_strlen(ptr)) == 0;
+// compara dos cadenas y devuelve verdadero si son iguales
+bool str_equals(const char* a, const char* b) {
+	// itera hasta que A sea nulo o a y b dejen de ser iguales.
+	while (*a && (*a == *b)) {
+		a++;
+		b++;
+	}
+	// si todos los caracteres son los mismos en ambas cadenas,
+	// se retornara verdadero.
+	return *a == *b;
+
 }
 // Function to check if a specific word is present in a char*
 bool str_contain(const char* str, const char* word) {
@@ -699,9 +786,11 @@ int str_compare(const char* str1, const char* str2)
 
 	return diff;
 }
-
+bool haves_same_path(const char* filepath, const char* is) {
+	return strncmp(is, filepath, _sys_strlen(is))==0;
+}
 // Equals
-bool str_equals(const char* str1, const char* str2) {
+bool str_equals_advanced(const char* str1, const char* str2) {
 	int a = len(str1);
 	int b = len(str2);
 
@@ -1016,7 +1105,7 @@ namespace HTTP
 
 		serverName = url;  //set url
 		memFree(r_buffer, bufMaxLen);
-		
+
 		sys_net_initialize_network(); //init network
 		httpPool = (void*)HTTP_POOL_BUFFER; //address to: 0x10000 free bytes
 		cellHttpInit(httpPool, HTTP_POOL_SIZE);
@@ -1646,27 +1735,8 @@ void patcher(int Address, int Destination, bool Linked)
 	Memcpy((void*)Address, FuncBytes, 4 * 4);
 }
 
-void log(char* f) {
-	char* fn = "/dev_hdd0/tmp/dclient/session_log.log";
-	aptff(fn, f);
-}
-void log_f(char* f, int f2) {
-	char logg[200];
-	_sys_snprintf(logg, 200, f, f2);
-	log(logg);
-}
-void log_f(char* f, float f2) {
-	char logg[200];
-	_sys_snprintf(logg, 200, f, f2);
-	log(logg);
-}
-void log_f(char* f, unsigned int f2) {
-	char logg[200];
-	_sys_snprintf(logg, 200, f, f2);
-	log(logg);
-}
-
 void hookfunction(uint32_t functionStartAddress, uint32_t newFunction, uint32_t functionStub, const char* id = "") {
+	//ps3_writelineF("hook %x -> %x, %x, \"%s\"", functionStartAddress, newFunction, functionStub, id);
 	uint32_t normalFunctionStub[8], hookFunctionStub[4];
 	sys_dbg_read_process_memory_ps3mapi(functionStartAddress, normalFunctionStub, 0x10);
 	sys_dbg_read_process_memory(functionStartAddress, normalFunctionStub, 0x10);
@@ -1682,13 +1752,8 @@ void hookfunction(uint32_t functionStartAddress, uint32_t newFunction, uint32_t 
 	hookFunctionStub[3] = 0x4E800420;
 	sys_dbg_write_process_memory_ps3mapi(functionStartAddress, hookFunctionStub, 0x10);
 	sys_dbg_write_process_memory(functionStartAddress, hookFunctionStub, 0x10);
-	log("patch start at ");
-	log_f("(%x)", functionStartAddress);
-	log_f(" appending local func (%x).\n", newFunction);
+
 	PATCHES_COUNT++;
-}
-void hookfunction(uint32_t functionStartAddress, void* newFunction, void* functionStub, const char* id = "") {
-	hookfunction(functionStartAddress, *(uintaddr)newFunction, *(uintaddr)functionStub, id);
 }
 char* toSign(int character) {
 	char s[]{ (char)character };
@@ -1783,7 +1848,7 @@ namespace vector3_parse {
 		return 1; // Successful parsing
 	}
 }
-
+#define itrcp hookfunction
 uint32_t fn(void* f) {
 	return *(uintaddr)f;
 }
@@ -1889,29 +1954,30 @@ bool strcont(char* w1, char* w2)
 }
 
 int atoi(const char* str) {
-    int result = 0;
-    int sign = 1;
-    int i = 0;
+	int result = 0;
+	int sign = 1;
+	int i = 0;
 
-    // Skip leading whitespace
-    while (str[i] == ' ')
-        i++;
+	// Skip leading whitespace
+	while (str[i] == ' ')
+		i++;
 
-    // Check for sign
-    if (str[i] == '-') {
-        sign = -1;
-        i++;
-    } else if (str[i] == '+') {
-        i++;
-    }
+	// Check for sign
+	if (str[i] == '-') {
+		sign = -1;
+		i++;
+	}
+	else if (str[i] == '+') {
+		i++;
+	}
 
-    // Convert digits to integer
-    while (str[i] >= '0' && str[i] <= '9') {
-        result = result * 10 + (str[i] - '0');
-        i++;
-    }
+	// Convert digits to integer
+	while (str[i] >= '0' && str[i] <= '9') {
+		result = result * 10 + (str[i] - '0');
+		i++;
+	}
 
-    return sign * result;
+	return sign * result;
 }
 
 float nsqrtf(float x) {
@@ -1976,8 +2042,8 @@ public:
 	}
 
 	void clear() {
-		subs.next = nullptr; 
-		count = 0; 
+		subs.next = nullptr;
+		count = 0;
 	}
 
 	int size() const {
@@ -2024,35 +2090,35 @@ const char* nat_to_str(uint8_t nat) {
 // This function will store an empty char array for formatting at the specified buffer.
 // Max: 256;
 
-char* stack(char* forBuffer, int & size){
+char* stack(char* forBuffer, int& size) {
 	short len = _sys_strlen(forBuffer);
 	size = 0;
-	if (len > 0){
-		if (len < 8){
+	if (len > 0) {
+		if (len < 8) {
 			char b[12];
 			size = 12;
 			return b;
 		}
-		else if (len >= 8 && len <= 16){
-			
+		else if (len >= 8 && len <= 16) {
+
 			char b[18];
 			size = 18;
 			return b;
 		}
-		else if (len >= 16 && len <= 32){
-			
+		else if (len >= 16 && len <= 32) {
+
 			char b[34];
 			size = 34;
 			return b;
 		}
-		else if (len >= 32 && len <= 64){
-			
+		else if (len >= 32 && len <= 64) {
+
 			char b[68];
 			size = 68;
 			return b;
 		}
-		else if (len >= 64){
-			
+		else if (len >= 64) {
+
 			char b[132];
 			size = 132;
 			return b;
@@ -2060,36 +2126,36 @@ char* stack(char* forBuffer, int & size){
 	}
 	return nullptr;
 }
-wchar_t* stackW(char* forBuffer, int & size){
+wchar_t* stackW(char* forBuffer, int& size) {
 
 	short len = _sys_strlen(forBuffer);
 	size = 0;
-	if (len > 0){
-		if (len < 8){
+	if (len > 0) {
+		if (len < 8) {
 			wchar_t b[12];
 			size = 12;
 			return b;
 		}
-		else if (len >= 8 && len <= 16){
-			
+		else if (len >= 8 && len <= 16) {
+
 			wchar_t b[18];
 			size = 18;
 			return b;
 		}
-		else if (len >= 16 && len <= 32){
-			
+		else if (len >= 16 && len <= 32) {
+
 			wchar_t b[34];
 			size = 34;
 			return b;
 		}
-		else if (len >= 32 && len <= 64){
-			
+		else if (len >= 32 && len <= 64) {
+
 			wchar_t b[68];
 			size = 68;
 			return b;
 		}
-		else if (len >= 64){
-			
+		else if (len >= 64) {
+
 			wchar_t b[132];
 			size = 132;
 			return b;
