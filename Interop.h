@@ -28,6 +28,7 @@ extern "C"
 static volatile uint32_t is_exit_game = 0;
 
 
+
 #define malloc _sys_malloc
 #define printf _sys_printf
 #define snprintf _sys_snprintf
@@ -40,3 +41,4 @@ static volatile uint32_t is_exit_game = 0;
 #define free _sys_free
 #define strleng _sys_strlen
 #define strcpy _sys_strcpy
+#pragma once

@@ -47,8 +47,9 @@
 #include <../PS3_CELL_UTIL/Interop.h>
 #include "cell/pad.h"
 typedef int ref;
+typedef unsigned int uref;
 typedef sys_ppu_thread_t thread;
-typedef char byte;
+typedef unsigned char byte;
 #define MAX(a, b)			((a) >= (b) ? (a) : (b))
 #define MIN(a, b)			((a) <= (b) ? (a) : (b))
 #define ABS(a)				(((a) < 0) ? -(a) : (a))
@@ -60,7 +61,42 @@ typedef char byte;
 #define	INT32(a)			(*((u32*)(a)))
 #define LCASE(a)	(a | 0x20)
 #define GetPointer(X) *(int*)(X)
+#define NAMEOF(var) #var
 
+double floord(double x) {
+	if (x < 0 && x != static_cast<int>(x)) {
+		return static_cast<int>(x) - 1;
+	}
+	else {
+		return static_cast<int>(x);
+	}
+}
+
+double mod(double a, double b) {
+	if (b == 0.0) {
+		return 0.0;
+	}
+	double result = a - b * floord(a / b);
+	return result;
+}
+template <typename T>
+struct property
+{
+	
+private: 
+	T value;
+public:
+	property(T v){
+		this->value = v;
+	}	
+	T getValue() {
+		return value;
+	}
+
+};
+
+
+typedef uint64_t any;
 enum THREAD_PRIORITY
 {
 	LOWEST = 3000,
@@ -72,6 +108,16 @@ enum THREAD_PRIORITY
 	ALL = 0,
 
 };
+
+int do_test_thread_inst(void(*fn)(uint64_t), const char* DebugName = "TestThread") {
+	thread t;
+	int errn = sys_ppu_thread_create(&t, fn, 0, 2000, 10000, 0, DebugName);
+	if (errn == 0){
+		return t;
+	}
+	return errn;
+}
+
 
 struct point
 {
@@ -106,8 +152,11 @@ typedef unsigned char BYTE;
 typedef unsigned char* PBYTE;
 typedef void VOID;
 typedef void* PVOID;
-
-
+typedef wchar_t wchar;
+template <class T>
+uintptr_t this_stor(T* s) {
+	return (unsigned int)s;
+}
 int toInt(float input) {
 	bool negative = input < 0.0f;
 	if (negative) input *= -1.0f;
@@ -135,32 +184,12 @@ typedef uint64_t uint64;
 typedef uint32_t* uintaddr;
 typedef uint _DWORD;
 typedef uint address;
-template <class T>
-class collection
-{
-private:
-	T col[10];
-	short count = -1;
-public:
-	collection<T>() {
 
-	}
-	T add(T s) {
-		if (get_count() >= 9) {
-			return NULL;
-		}
-		count++;
-		col[count] = s;
-	}
-	short get_count() {
-		return count + 1;
-	}
-	T at(short s) {
-		return T[s];
-	}
-	T operator+=(T s) { return add(T); }
-	int operator [] (short i) { return H[i]; }
-};
+void execute_stub_reference() {
+	__nop(); __nop(); __nop(); __nop(); __nop();
+}
+
+
 float get_decimal(float number) {
 	int integerPart = static_cast<int>(number);
 	float fractional = number - integerPart;
@@ -176,9 +205,32 @@ int format_float(char* buffer, float v) {
 	int a = value / 10000;
 	int b = (value / 1000) % 10;
 	int c = (value / 100) % 10;
+	b = b < 0 ? 0 : b;
+	c = c < 0 ? 0 : c;
+	//int d = (value / 10) % 10;
+	//int e = value % 10;
+	return _sys_snprintf(buffer, 32, "%i.%i%i     ", a, b, c);
+}
+int format_double(char* buffer, double v) {
+	const int factor = 100000;
+	int value = static_cast<int>(v * factor + 0.5f);
+	int a = value / 10000;
+	int b = (value / 1000) % 10;
+	int c = (value / 100) % 10;
 	int d = (value / 10) % 10;
 	int e = value % 10;
-	return _sys_snprintf(buffer, 32, "%d.%d%d%d%d%d", a, b, c, d, e);
+	return _sys_snprintf(buffer, 32, "%d.%i%i%i%i%i   ", a, b, c, d, e);
+}
+
+int format_d1(char* buffer, double v) {
+	const int factor = 100000;
+	int value = static_cast<int>(v * factor + 0.5f);
+	int a = value / 10000;
+	int b = (value / 1000) % 10;
+	int c = (value / 100) % 10;
+	int d = (value / 10) % 10;
+	int e = value % 10;
+	return _sys_snprintf(buffer, 32, "%i.%i", a, b, c, d, e);
 }
 template <typename T>
 short count(T* pointer, uint len) {
@@ -224,7 +276,74 @@ struct interval
 		return false;
 	}
 	interval(short max) { this->max = max; };
-};
+}; 
+
+
+CellRtcDateTime epochToDatetime(time_t epoch) {
+	const int SECONDS_IN_A_MINUTE = 60;
+	const int SECONDS_IN_AN_HOUR = 3600;
+	const int SECONDS_IN_A_DAY = 86400;
+
+	const int SECONDS_IN_A_LEAP_YEAR = 31622400;
+	const int SECONDS_IN_A_NON_LEAP_YEAR = 31536000;
+	const int DAYS_IN_MONTHS[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+	int seconds = epoch % SECONDS_IN_A_MINUTE;
+	epoch /= SECONDS_IN_A_MINUTE;
+	int minutes = epoch % SECONDS_IN_A_MINUTE;
+	epoch /= SECONDS_IN_A_MINUTE;
+	int hours = epoch % 24;
+	epoch /= 24;
+	int year = 1970;
+	int daysInYear;
+	while (true) {
+		if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
+			daysInYear = 366;
+		}
+		else {
+			daysInYear = 365;
+		}
+
+		if (epoch >= daysInYear) {
+			epoch -= daysInYear;
+			++year;
+		}
+		else {
+			break;
+		}
+	}
+	int month = 0;
+	bool isLeapYear = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+	while (true) {
+		int daysInMonth = DAYS_IN_MONTHS[month];
+		if (isLeapYear && month == 1) {
+			++daysInMonth;
+		}
+
+		if (epoch >= daysInMonth) {
+			epoch -= daysInMonth;
+			++month;
+		}
+		else {
+			break;
+		}
+	}
+
+	int day = epoch + 1; // day of the month
+	CellRtcDateTime date;
+	date.day = day;
+	date.hour = hours;
+	date.minute = hours;
+	date.year = year;
+	date.month = month;
+	date.second = seconds;
+
+	// Convert total days to microseconds
+	date.microsecond = day * 24 * 60 * 60 * 1000000;
+
+
+	return date;
+}
+
 
 static struct platform_info {
 	uint firmware_version;
@@ -235,6 +354,8 @@ static inline int lv2_get_platform_info(struct platform_info* info)
 	system_call_1(387, (uint)info);
 	return (uint)p1;
 }
+
+
 static char* buffer(int a) {
 	char buff[1]{ a };
 	return buff;
@@ -342,6 +463,21 @@ static float get_firmware_version(void)
 	char FW[8]; sprintf(FW, "%02X", info.firmware_version);
 	return (float)(FW[0] & 0x0F) + val(FW + 2) * 0.00001f;
 }
+
+
+void print_byte(char* buffer, byte value) {
+	char lett[0x3];
+	if (value < 0x0A){
+		snprintf(lett, 3, "0%x", value);
+	}
+	else{
+		snprintf(lett, 3, "%x", value);
+	}
+	_sys_strncpy(buffer, lett, 3);
+		
+}
+
+
 
 
 int PATCHES_COUNT = 0;
@@ -478,23 +614,22 @@ char* createUserIdString(char* buffer, int userId) {
 char* cat(char* destination, const char* source) {
 	char* result = destination;
 
-	// Move to the end of the destination string
 	while (*destination != '\0') {
 		++destination;
 	}
 
-	// Copy the source string to the end of the destination
 	while (*source != '\0') {
 		*destination = *source;
 		++destination;
 		++source;
 	}
-
-	// Null-terminate the result
 	*destination = '\0';
 
 	return result;
 }
+
+
+
 template <typename ... Arguments>
 // mallocd
 char* format(const char* format, Arguments... s) {
@@ -787,7 +922,7 @@ int str_compare(const char* str1, const char* str2)
 	return diff;
 }
 bool haves_same_path(const char* filepath, const char* is) {
-	return strncmp(is, filepath, _sys_strlen(is))==0;
+	return strncmp(is, filepath, _sys_strlen(is)) == 0;
 }
 // Equals
 bool str_equals_advanced(const char* str1, const char* str2) {
@@ -955,6 +1090,18 @@ char* extractFilename(const char* path) {
 
 	return filename;
 }
+short generateUniqueId(const char*& text) {
+	short value{ 0 };
+	auto len = _sys_strlen(text);
+	for (byte i = 0; i < len; i++) {
+		byte asc = text[i];
+		value += (asc + (i));
+	}
+	value -= len;
+	return value;
+}
+
+
 bool isNotWeird(char c) {
 	return c >= 33 && c < 127;
 }
@@ -1176,7 +1323,24 @@ template<typename R, typename... Arguments> inline R Call(long long function, Ar
 	R(*temp)(Arguments...) = (R(*)(Arguments...)) & toc_t;
 	return temp(args...);
 }
+template <class Instance>
+int CallInt(uintptr_t address, Instance * thisInst) {
+	return Call<int>(address, (uint)thisInst);
+}
 
+template <typename R, class Instance, typename ...Args>
+R CallToInstance(uintptr_t address, Instance* thisInst, Args...s ) {
+	return Call<R>(address, (uint)thisInst, s...);
+}
+// std
+template <typename...arg>
+size_t printfw(wchar_t* buff, size_t sz, wchar_t* format, arg...s) {
+	// fucking linker error 
+	//return std::swprintf(buff, sz, format, s...);
+
+	return Call<any>(0x00CB9BD8, buff, sz, format, s...);
+
+}
 char* desreference_stringptr(unsigned int i) {
 	char* s = (char*)i;
 	if (s) {
@@ -1208,6 +1372,34 @@ int str_atoi(char* str)
 }
 
 
+class allocation {
+	const std::size_t storedSize;
+	byte* data;
+public:
+
+	bool notNull() {
+		return data != nullptr;
+	}
+	uintptr_t getPtr() {
+		return reinterpret_cast<uintptr_t>(data);
+	}
+	template <typename T>
+	T* const as() {
+		return (T*)data;
+	}
+	const std::size_t getStorageSize() {
+		return storedSize;
+	}
+	void clear() {
+		_sys_memset(data, 0, storedSize);
+	}
+	allocation(std::size_t size) :storedSize(size) {
+		data = (byte*)_sys_malloc(size);
+	}
+	~allocation() {
+		_sys_free(data);
+	}
+};
 void get_temperature(uint32_t a, uint32_t* b)
 {
 	system_call_2(383, (uint64_t)(uint32_t)a, (uint64_t)(uint32_t)b);
@@ -1238,7 +1430,7 @@ void WriteMemory(int address, char hex)
 	*(int*)address = hex;
 }
 
-//Console Commands
+//sys_timer_usleep
 void sleep(usecond_t time)
 {
 	sys_timer_usleep(time * 1000);
@@ -1432,14 +1624,17 @@ void sys_sleep(uint64_t milliseconds)
 	sys_timer_usleep(milliseconds * 1000);
 
 }
-
+void sleep_for_real(uint64_t ms) {
+	sys_timer_sleep(ms);
+}
 
 bool isAlphanumeric(char ch) {
 	// Check if the character is an alphanumeric character
 	bool flag = ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'));
 	bool flag2 = ch != '-' && ch != '_';
 	return flag && (!flag2);
-}// Function to check if a string ends with a specified suffix
+}
+// Function to check if a string ends with a specified suffix
 bool endsWith(const char* str, const char* suffix) {
 	// Find the lengths of the suffix
 	int suffixLength = 0;
@@ -1504,6 +1699,15 @@ long datetimeToTimestamp(int year, int month, int day, int hour, int minute, int
 	milliseconds += second * 1000;
 
 	return milliseconds;
+}
+
+// Function to get the extension of a file from a given path
+const char* getFileExtension(const char* filename) {
+	const char* dot = strrchr((char*)filename, '.');
+	if (!dot || dot == filename) {
+		return ""; // No extension found
+	}
+	return dot + 1; // Skip the dot itself
 }
 
 //Console Commands
@@ -1735,26 +1939,31 @@ void patcher(int Address, int Destination, bool Linked)
 	Memcpy((void*)Address, FuncBytes, 4 * 4);
 }
 
-void hookfunction(uint32_t functionStartAddress, uint32_t newFunction, uint32_t functionStub, const char* id = "") {
+void hookfunction(uint32_t address, uint32_t patchedfunc, uint32_t patchstub, const char* id = "") {
 	//ps3_writelineF("hook %x -> %x, %x, \"%s\"", functionStartAddress, newFunction, functionStub, id);
 	uint32_t normalFunctionStub[8], hookFunctionStub[4];
-	sys_dbg_read_process_memory_ps3mapi(functionStartAddress, normalFunctionStub, 0x10);
-	sys_dbg_read_process_memory(functionStartAddress, normalFunctionStub, 0x10);
-	normalFunctionStub[4] = 0x3D600000 + ((functionStartAddress + 0x10 >> 16) & 0xFFFF);
-	normalFunctionStub[5] = 0x616B0000 + (functionStartAddress + 0x10 & 0xFFFF);
+	sys_dbg_read_process_memory_ps3mapi(address, normalFunctionStub, 0x10);
+	sys_dbg_read_process_memory(address, normalFunctionStub, 0x10);
+	normalFunctionStub[4] = 0x3D600000 + ((address + 0x10 >> 16) & 0xFFFF);
+	normalFunctionStub[5] = 0x616B0000 + (address + 0x10 & 0xFFFF);
 	normalFunctionStub[6] = 0x7D6903A6;
 	normalFunctionStub[7] = 0x4E800420;
-	sys_dbg_write_process_memory_ps3mapi(functionStub, normalFunctionStub, 0x20);
-	sys_dbg_write_process_memory(functionStub, normalFunctionStub, 0x20);
-	hookFunctionStub[0] = 0x3D600000 + ((newFunction >> 16) & 0xFFFF);
-	hookFunctionStub[1] = 0x616B0000 + (newFunction & 0xFFFF);
+	sys_dbg_write_process_memory_ps3mapi(patchstub, normalFunctionStub, 0x20);
+	sys_dbg_write_process_memory(patchstub, normalFunctionStub, 0x20);
+	hookFunctionStub[0] = 0x3D600000 + ((patchedfunc >> 16) & 0xFFFF);
+	hookFunctionStub[1] = 0x616B0000 + (patchedfunc & 0xFFFF);
 	hookFunctionStub[2] = 0x7D6903A6;
 	hookFunctionStub[3] = 0x4E800420;
-	sys_dbg_write_process_memory_ps3mapi(functionStartAddress, hookFunctionStub, 0x10);
-	sys_dbg_write_process_memory(functionStartAddress, hookFunctionStub, 0x10);
-
+	sys_dbg_write_process_memory_ps3mapi(address, hookFunctionStub, 0x10);
+	sys_dbg_write_process_memory(address, hookFunctionStub, 0x10);
+	
 	PATCHES_COUNT++;
 }
+void hookfunction(uintptr_t address, void* newfunc, void* newstub)
+{
+	hookfunction(address, (uint32_t)newfunc, (uint32_t)newstub);
+}
+
 char* toSign(int character) {
 	char s[]{ (char)character };
 	return s;
@@ -1852,6 +2061,8 @@ namespace vector3_parse {
 uint32_t fn(void* f) {
 	return *(uintaddr)f;
 }
+
+#define NADDR(var) (#var " " + fn(&var))
 char readStrWide[32];
 // 
 char* readWide(uint address, int len = 16) {
@@ -1881,7 +2092,7 @@ int arr_size(T* arr) {
 	return sizeof(arr) / sizeof(arr[0]);
 }
 
-int ca2(int addr)
+int guessfix_storage_for_mc(int addr)
 {
 	//char getVal[1];
 	//int val = sys_dbg_read_process_memory_ps3mapi(addr, getVal, 1);
@@ -1985,15 +2196,32 @@ float nsqrtf(float x) {
 		return 0.0f;
 	float result = x;
 
-	result = 0.5f * (result + x / result); // 
-	result = 0.5f * (result + x / result); // 2 
-	result = 0.5f * (result + x / result); // 3
-	result = 0.5f * (result + x / result); // 4 
-	result = 0.5f * (result + x / result); // 5
-	result = 0.5f * (result + x / result); // 6 
-	result = 0.5f * (result + x / result); // 7 
-	result = 0.5f * (result + x / result); // 9 
-	result = 0.5f * (result + x / result); // 10
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	return result;
+}
+
+double nsqrtf(double x) {
+	if (x <= 0.0f)
+		return 0.0f;
+	double result = x;
+
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
+	result = 0.5f * (result + x / result);
 	return result;
 }
 char* interaddrToStr(unsigned int ip) {
@@ -2126,6 +2354,15 @@ char* stack(char* forBuffer, int& size) {
 	}
 	return nullptr;
 }
+
+template <class C, class T>
+T reinterpret(C v) {
+	return reinterpret_cast<T>(v);
+}
+template <typename From, typename To>
+To cast(From v) {
+	return static_cast<To>(v);
+}
 wchar_t* stackW(char* forBuffer, int& size) {
 
 	short len = _sys_strlen(forBuffer);
@@ -2163,6 +2400,151 @@ wchar_t* stackW(char* forBuffer, int& size) {
 	}
 	return nullptr;
 }
+
+
+void printFloat(double value, char* buffer, int decimal_places) {
+	double int_part, frac_part;
+	frac_part = modf(value, &int_part);
+
+	// Convertir la parte fraccional en un entero ajustado a la cantidad de decimales
+	int scale = std::pow((double)10, (int)decimal_places);
+	long long_frac_part = fabs(frac_part * scale);
+
+	// Formatear como dos números enteros
+	snprintf(buffer, 100, "%d.%0*lld", (int)int_part, decimal_places, long_frac_part);
+}
+
+
+
+namespace typeprinter {
+
+	const char* BOOL_LITERAL = "true";
+	const char* BOOL_LITERAL_FALSE = "false";
+
+	size_t printUint(char* buff, uint& v, bool zx) {
+		if (zx)
+			return snprintf(buff, 12, "0x%x", v);
+		else
+			return snprintf(buff, 12, "%x", v);
+	}
+	size_t printInt(char* buff, int& v) {
+		return snprintf(buff, 20, "%i", v);
+	}
+	size_t printStr(char* buff, char*& ptr, size_t sz = 64) {
+		return snprintf(buff, sz, "%s", ptr);
+	}
+	size_t printBool(char* buff, bool v, bool literal = false) {
+		if (literal)
+			return snprintf(buff, 5, "%s", (v ? BOOL_LITERAL : BOOL_LITERAL_FALSE));
+		else
+			return snprintf(buff, 2, "%i", v); 
+	}
+	class printer {
+	private:
+		uintptr_t object = 0;
+		uintptr_t output = 0;
+		uint size;
+		template <typename T>
+		T as() {
+			return *(T*)object;
+		}
+		template<typename T>
+		T* asptr() {
+			return (T*)object;
+		}
+		char* getPointer() {
+			if (output == 0) {
+				return;
+			}
+			return (char*)output;
+		}
+		bool writable() {
+			return
+				output > 0 && object > 0 && size > 0;
+		}
+	public:
+		void setObject(void* o) {
+			object = fn(o);
+		}
+		void setOutput(char* o, size_t sz = 10) {
+			output = (uint)o;
+		}
+		void setBufferSize(size_t sz) {
+			this->size = sz;
+		}
+		void clear() {
+			_sys_memset(getPointer(), 0, size);
+		}
+		size_t printAsBool(bool literal) {
+			if (!writable()) {
+				return -1;
+			}
+
+			return typeprinter::printBool(getPointer(), as<bool>(), literal);
+		}
+		size_t printAsString() {
+			if (!writable()) {
+				return -1;
+			}
+			size_t sz= size;
+
+			char* ptr = asptr<char>();
+			uint t = _sys_strlen(ptr);
+			if (t < sz)
+			{
+				sz = t;
+			}
+			return typeprinter::printStr(getPointer(), ptr, t);
+		}
+		size_t printAsInteger() {
+			if (!writable()) {
+				return -1;
+			}
+			int val = as<int>();
+			return typeprinter::printInt(getPointer(), val);
+		}
+
+		size_t printAsUint(bool zx = false) {
+			if (!writable()) {
+				return -1;
+			}
+			uint val = as<uint>();
+			return typeprinter::printUint(getPointer(), val, zx);
+		}
+
+	};
+
+}
+std::string format_with_suffix(int& num) {
+	std::string suffix;
+	double formattedNumber = num;
+
+	char buffer[50];
+	if (num >= 1000000) {
+		formattedNumber = num / 1000000.0;
+		suffix = "M";
+	}
+	else if (num >= 1000) {
+		formattedNumber = num / 1000.0;
+		suffix = "K";
+	}
+	else {
+		snprintf(buffer, 35, "%d", cast<double, int>(num));
+		return std::string(buffer);
+	}
+
+	if (formattedNumber == static_cast<int>(formattedNumber)) {
+		snprintf(buffer, sizeof(buffer), "%d%s", static_cast<int>(formattedNumber), suffix.c_str());
+
+	}
+	else {
+		snprintf(buffer, sizeof(buffer), "%.1f%s", formattedNumber, suffix.c_str());
+	}
+	return std::string(buffer);
+
+}
+
+
 #ifndef null
 #define null 0;
 #endif // !null
@@ -2295,4 +2677,3 @@ void* operator new[](std::size_t size, const _STD nothrow_t&)  // allocate array
 									value = s;
 								}
 							};
-
