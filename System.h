@@ -50,6 +50,7 @@ typedef int ref;
 typedef unsigned int uref;
 typedef sys_ppu_thread_t thread;
 typedef unsigned char byte;
+
 #define MAX(a, b)			((a) >= (b) ? (a) : (b))
 #define MIN(a, b)			((a) <= (b) ? (a) : (b))
 #define ABS(a)				(((a) < 0) ? -(a) : (a))
@@ -62,6 +63,21 @@ typedef unsigned char byte;
 #define LCASE(a)	(a | 0x20)
 #define GetPointer(X) *(int*)(X)
 #define NAMEOF(var) #var
+#define CREATE_DUMMY_STUB(ret_type, func_name, ...) \
+    ret_type func_name(__VA_ARGS__) { \
+        __nop(); \
+        __nop(); \
+        __nop(); \
+        __nop(); \
+        __nop(); \
+    }
+
+
+
+
+
+
+
 
 double floord(double x) {
 	if (x < 0 && x != static_cast<int>(x)) {
@@ -82,13 +98,13 @@ double mod(double a, double b) {
 template <typename T>
 struct property
 {
-	
-private: 
+
+private:
 	T value;
 public:
-	property(T v){
+	property(T v) {
 		this->value = v;
-	}	
+	}
 	T getValue() {
 		return value;
 	}
@@ -109,10 +125,15 @@ enum THREAD_PRIORITY
 
 };
 
+void asm_write_nop_ori(void* a) {
+	*(int*)a = 0x60000000;
+}
+
+
 int do_test_thread_inst(void(*fn)(uint64_t), const char* DebugName = "TestThread") {
 	thread t;
 	int errn = sys_ppu_thread_create(&t, fn, 0, 2000, 10000, 0, DebugName);
-	if (errn == 0){
+	if (errn == 0) {
 		return t;
 	}
 	return errn;
@@ -179,6 +200,7 @@ float toFloat(int input) {
 }
 typedef unsigned char uchar;
 typedef unsigned int uint;
+typedef uint nzvint; // non zero integer.
 typedef uint32_t uint32;
 typedef uint64_t uint64;
 typedef uint32_t* uintaddr;
@@ -221,6 +243,24 @@ int format_double(char* buffer, double v) {
 	int e = value % 10;
 	return _sys_snprintf(buffer, 32, "%d.%i%i%i%i%i   ", a, b, c, d, e);
 }
+
+// Compares if data only atleast haves "data" in it, only compares the len of "comparing" inside "data"
+bool safest_compare(const char* data, const char* comparing) {
+	return !_sys_strncmp(comparing, data, _sys_strlen(comparing));
+}
+bool safest_endwith(const char* data, const char* end) {
+	size_t data_len = _sys_strlen(data);
+	size_t end_len = _sys_strlen(end);
+
+	if (end_len > data_len) {
+		return false;
+	}
+
+	// Ajustamos el puntero data a la posición correcta
+	return !_sys_strcmp(data + data_len - end_len, end);
+}
+
+
 
 int format_d1(char* buffer, double v) {
 	const int factor = 100000;
@@ -276,7 +316,7 @@ struct interval
 		return false;
 	}
 	interval(short max) { this->max = max; };
-}; 
+};
 
 
 CellRtcDateTime epochToDatetime(time_t epoch) {
@@ -467,14 +507,14 @@ static float get_firmware_version(void)
 
 void print_byte(char* buffer, byte value) {
 	char lett[0x3];
-	if (value < 0x0A){
+	if (value < 0x0A) {
 		snprintf(lett, 3, "0%x", value);
 	}
-	else{
+	else {
 		snprintf(lett, 3, "%x", value);
 	}
 	_sys_strncpy(buffer, lett, 3);
-		
+
 }
 
 
@@ -1001,7 +1041,6 @@ char* _strtok(char* str, const char* delimiter) {
 
 	return tokenStart;
 }
-
 void splitAndRetrieve(const char* input, char* result) {
 	int i = 0;
 
@@ -1324,14 +1363,10 @@ template<typename R, typename... Arguments> inline R Call(long long function, Ar
 	return temp(args...);
 }
 template <class Instance>
-int CallInt(uintptr_t address, Instance * thisInst) {
+int CallInt(uintptr_t address, Instance* thisInst) {
 	return Call<int>(address, (uint)thisInst);
 }
 
-template <typename R, class Instance, typename ...Args>
-R CallToInstance(uintptr_t address, Instance* thisInst, Args...s ) {
-	return Call<R>(address, (uint)thisInst, s...);
-}
 // std
 template <typename...arg>
 size_t printfw(wchar_t* buff, size_t sz, wchar_t* format, arg...s) {
@@ -1341,6 +1376,11 @@ size_t printfw(wchar_t* buff, size_t sz, wchar_t* format, arg...s) {
 	return Call<any>(0x00CB9BD8, buff, sz, format, s...);
 
 }
+template <typename R, class Instance, typename ...Args>
+R CallToInstance(uintptr_t address, Instance* thisInst, Args...s) {
+	return Call<R>(address, (uint)thisInst, s...);
+}
+
 char* desreference_stringptr(unsigned int i) {
 	char* s = (char*)i;
 	if (s) {
@@ -1956,7 +1996,7 @@ void hookfunction(uint32_t address, uint32_t patchedfunc, uint32_t patchstub, co
 	hookFunctionStub[3] = 0x4E800420;
 	sys_dbg_write_process_memory_ps3mapi(address, hookFunctionStub, 0x10);
 	sys_dbg_write_process_memory(address, hookFunctionStub, 0x10);
-	
+
 	PATCHES_COUNT++;
 }
 void hookfunction(uintptr_t address, void* newfunc, void* newstub)
@@ -2437,7 +2477,7 @@ namespace typeprinter {
 		if (literal)
 			return snprintf(buff, 5, "%s", (v ? BOOL_LITERAL : BOOL_LITERAL_FALSE));
 		else
-			return snprintf(buff, 2, "%i", v); 
+			return snprintf(buff, 2, "%i", v);
 	}
 	class printer {
 	private:
@@ -2486,7 +2526,7 @@ namespace typeprinter {
 			if (!writable()) {
 				return -1;
 			}
-			size_t sz= size;
+			size_t sz = size;
 
 			char* ptr = asptr<char>();
 			uint t = _sys_strlen(ptr);
@@ -2589,91 +2629,91 @@ void* operator new[](std::size_t size) _THROW1(_XSTD bad_alloc)	// allocate arra
 	return _sys_malloc(size);
 }
 void* operator new[](std::size_t size, const _STD nothrow_t&)  // allocate array or return null pointer
-	{
-		return _sys_malloc(size);
-	}
-	void* operator new[](size_t size, size_t align)
-		{
-			return operator new(size, align);
-		}
-		void* operator new[](size_t size, size_t align, const _STD nothrow_t&)
-			{
-				return operator new(size, align);
-			}
-			void operator delete(void* mem) //_THROW0()  // delete allocated storage
-			{
-				_sys_free(mem);
-			}
-			// The rest of these deletes will be called if the correspond call to
-				// new throws an exception.
-			void operator delete(void* mem, const _STD nothrow_t&)
-			{
-				_sys_free(mem);
-			}
-			void operator delete(void* ptr, void* prt2)
-			{
-				return operator delete(ptr);
-			}
-			void operator delete(void* ptr, size_t align)
-			{
-				return operator delete(ptr);
-			}
-			void operator delete(void* ptr, size_t align, const _STD nothrow_t&) _THROW0()
-			{
-				return operator delete(ptr);
-			}
-			void operator delete(void* ptr, size_t align, void* prt2)
-			{
-				return operator delete(ptr);
-			}
-			void operator delete[](void* mem)  // delete allocated array
-				{
-					_sys_free(mem);
-				}
-				void operator delete[](void* mem, const _STD nothrow_t&) _THROW0() // delete if nothrow array new fails -- REPLACEABLE
-				{
-					_sys_free(mem);
-				}
-				void operator delete[](void* ptr, void* prt2)
-					{
-						return operator delete(ptr, prt2);
-					}
-					void operator delete[](void* ptr, size_t align)
-						{
-							return operator delete(ptr, align);
-						}
-						void operator delete[](void* ptr, size_t align, const _STD nothrow_t&) _THROW0()
-						{
-							return operator delete(ptr, align);
-						}
-						void operator delete[](void* ptr, size_t align, void* prt2)
-							{
-								return operator delete(ptr, align);
-							}
+{
+	return _sys_malloc(size);
+}
+void* operator new[](size_t size, size_t align)
+{
+	return operator new(size, align);
+}
+void* operator new[](size_t size, size_t align, const _STD nothrow_t&)
+{
+	return operator new(size, align);
+}
+void operator delete(void* mem) //_THROW0()  // delete allocated storage
+{
+	_sys_free(mem);
+}
+// The rest of these deletes will be called if the correspond call to
+	// new throws an exception.
+void operator delete(void* mem, const _STD nothrow_t&)
+{
+	_sys_free(mem);
+}
+void operator delete(void* ptr, void* prt2)
+{
+	return operator delete(ptr);
+}
+void operator delete(void* ptr, size_t align)
+{
+	return operator delete(ptr);
+}
+void operator delete(void* ptr, size_t align, const _STD nothrow_t&) _THROW0()
+{
+	return operator delete(ptr);
+}
+void operator delete(void* ptr, size_t align, void* prt2)
+{
+	return operator delete(ptr);
+}
+void operator delete[](void* mem)  // delete allocated array
+{
+	_sys_free(mem);
+}
+void operator delete[](void* mem, const _STD nothrow_t&) _THROW0() // delete if nothrow array new fails -- REPLACEABLE
+{
+	_sys_free(mem);
+}
+void operator delete[](void* ptr, void* prt2)
+{
+	return operator delete(ptr, prt2);
+}
+void operator delete[](void* ptr, size_t align)
+{
+	return operator delete(ptr, align);
+}
+void operator delete[](void* ptr, size_t align, const _STD nothrow_t&) _THROW0()
+{
+	return operator delete(ptr, align);
+}
+void operator delete[](void* ptr, size_t align, void* prt2)
+{
+	return operator delete(ptr, align);
+}
 
 #pragma endregion
 
-							int threaded(void(*entry), const char* name = "threaded_function") {
-								uint64 t;
-								static uint32_t func = *(uintaddr)entry;
-								int errn = sys_ppu_thread_create(&t, [](uint64)->void
-									{
-										void(*s)() = (void(*)())func;
-										s();
-									}, 0, 1500, 5000, 0, name);
-								return errn;
-							}
+int threaded(void(*entry), const char* name = "threaded_function") {
+	uint64 t;
+	static uint32_t func = *(uintaddr)entry;
+	int errn = sys_ppu_thread_create(&t, [](uint64)->void
+		{
+			void(*s)() = (void(*)())func;
+			s();
+		}, 0, 1500, 5000, 0, name);
+	return errn;
+}
 
 
-							struct valuable
-							{
-								int oldValue = 0;
-								int value = 0;
-								void operator=(int v) {
-									oldValue = value;
-									value = v;
-								}
-								valuable(int s) {
-									value = s;
-								}
-							};
+struct valuable
+{
+	int oldValue = 0;
+	int value = 0;
+	void operator=(int v) {
+		oldValue = value;
+		value = v;
+	}
+	valuable(int s) {
+		value = s;
+	}
+};

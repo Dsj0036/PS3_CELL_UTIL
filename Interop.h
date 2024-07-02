@@ -25,7 +25,6 @@ extern "C"
 	int            _sys_tolower(int c);
 	int            _sys_toupper(int c);
 }
-static volatile uint32_t is_exit_game = 0;
 
 
 
