@@ -1,5 +1,4 @@
-#pragma once
-
+ï»¿
 #include <sys/timer.h>
 #include <xstring>
 #include <cellstatus.h>
@@ -51,6 +50,12 @@ typedef unsigned int uref;
 typedef sys_ppu_thread_t thread;
 typedef unsigned char byte;
 
+
+typedef int ref;
+typedef unsigned int uref;
+typedef sys_ppu_thread_t thread;
+typedef unsigned char byte;
+
 #define MAX(a, b)			((a) >= (b) ? (a) : (b))
 #define MIN(a, b)			((a) <= (b) ? (a) : (b))
 #define ABS(a)				(((a) < 0) ? -(a) : (a))
@@ -73,7 +78,14 @@ typedef unsigned char byte;
     }
 
 
-
+#define CREATE_DUMMY_STATIC_STUB(ret_type, func_name, ...) \
+    static ret_type func_name(__VA_ARGS__) { \
+        __nop(); \
+        __nop(); \
+        __nop(); \
+        __nop(); \
+        __nop(); \
+    }
 
 
 
@@ -231,8 +243,12 @@ int format_float(char* buffer, float v) {
 	c = c < 0 ? 0 : c;
 	//int d = (value / 10) % 10;
 	//int e = value % 10;
-	return _sys_snprintf(buffer, 32, "%i.%i%i     ", a, b, c);
+	return _sys_snprintf(buffer, 32, "%i,%i%if", a, b, c);
 }
+
+
+
+
 int format_double(char* buffer, double v) {
 	const int factor = 100000;
 	int value = static_cast<int>(v * factor + 0.5f);
@@ -256,7 +272,7 @@ bool safest_endwith(const char* data, const char* end) {
 		return false;
 	}
 
-	// Ajustamos el puntero data a la posición correcta
+	// Ajustamos el puntero data a la posiciÃ³n correcta
 	return !_sys_strcmp(data + data_len - end_len, end);
 }
 
@@ -394,7 +410,6 @@ static inline int lv2_get_platform_info(struct platform_info* info)
 	system_call_1(387, (uint)info);
 	return (uint)p1;
 }
-
 
 static char* buffer(int a) {
 	char buff[1]{ a };
@@ -1358,10 +1373,17 @@ char mem(int address, int index) {
 }
 template<typename R, typename... Arguments> inline R Call(long long function, Arguments... args)
 {
-	int toc_t[2] = { function, 0x014CDAB0 };
+	int toc_t[2] = { function,  0x014CDAB0 };
 	R(*temp)(Arguments...) = (R(*)(Arguments...)) & toc_t;
 	return temp(args...);
 }
+template<typename R, typename... Arguments> inline R Call2(uint toc, long long function, Arguments... args)
+{
+	int toc_t[2] = { function,  toc };
+	R(*temp)(Arguments...) = (R(*)(Arguments...)) & toc_t;
+	return temp(args...);
+}
+
 template <class Instance>
 int CallInt(uintptr_t address, Instance* thisInst) {
 	return Call<int>(address, (uint)thisInst);
@@ -2450,7 +2472,7 @@ void printFloat(double value, char* buffer, int decimal_places) {
 	int scale = std::pow((double)10, (int)decimal_places);
 	long long_frac_part = fabs(frac_part * scale);
 
-	// Formatear como dos números enteros
+	// Formatear como dos nÃºmeros enteros
 	snprintf(buffer, 100, "%d.%0*lld", (int)int_part, decimal_places, long_frac_part);
 }
 
@@ -2695,12 +2717,7 @@ void operator delete[](void* ptr, size_t align, void* prt2)
 
 int threaded(void(*entry), const char* name = "threaded_function") {
 	uint64 t;
-	static uint32_t func = *(uintaddr)entry;
-	int errn = sys_ppu_thread_create(&t, [](uint64)->void
-		{
-			void(*s)() = (void(*)())func;
-			s();
-		}, 0, 1500, 5000, 0, name);
+	int errn = sys_ppu_thread_create(&t, [](uint64 f)->void{void(*s)() = (void(*)())f;s();}, (uint64)entry, 1500, 5000, 0, name);
 	return errn;
 }
 
@@ -2715,5 +2732,23 @@ struct valuable
 	}
 	valuable(int s) {
 		value = s;
+		CallToInstance<int>(0x0, this);
 	}
 };
+
+
+
+
+#define IMPORT_CALL_TO_INSTANCE(address, name, ret) \
+    ret name() { \
+        return CallToInstance<ret>(address, this); \
+    }
+
+#define IMPORT_CALL(addr, return_type, func_name, args) \
+	private:  \
+		static int32_t func_name##_opd[2] = { addr, 0x014CDAB0 }; \
+		using func_name##_t = return_type(*)args; \
+	public: \
+	const __ImportedCalls::func_name##_t func_name = reinterpret_cast<__ImportedCalls::func_name##_t>(__ImportedCalls::func_name##_opd);
+
+
