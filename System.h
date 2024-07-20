@@ -1,4 +1,7 @@
-﻿
+﻿// PS3 Cell Utilities by Josh
+// cool in a way
+// Should include for entire project.
+
 #include <sys/timer.h>
 #include <xstring>
 #include <cellstatus.h>
@@ -45,20 +48,70 @@
 #include "cell/cell_fs.h"
 #include <../PS3_CELL_UTIL/Interop.h>
 #include "cell/pad.h"
+
+
+
+// OVERRIDE ALLOCATION OPERATORS
+#include <yvals.h> // for _CSTD
+#include <xstddef> // for _THROW1
+#include <new> // for nothrow_t
+
+
+
 typedef int ref;
 typedef unsigned int uref;
 typedef sys_ppu_thread_t thread;
 typedef unsigned char byte;
+typedef unsigned char uchar;
+typedef unsigned int uint;
+typedef uint nzvint; // non zero integer.
+typedef uint32_t uint32;
+typedef uint64_t uint64;
+typedef uint32_t* uintaddr;
+typedef uint _DWORD;
+typedef uint address;
+typedef uint64_t any;
 
 
-typedef int ref;
-typedef unsigned int uref;
-typedef sys_ppu_thread_t thread;
-typedef unsigned char byte;
+// delete for your project, dummy counter
+int PATCHES_COUNT = 0;
+
+
+
+template <typename T>
+struct property
+{
+
+private:
+	T value;
+public:
+	property(T v) {
+		this->value = v;
+	}
+	T getValue() {
+		return value;
+	}
+
+};
+
+
+
+enum THREAD_PRIORITY
+{
+	LOWEST = 3000,
+	BELOW_NORMAL = 2400,
+	LOW = 2000,
+	NORMAL = 1500,
+	ABOVE_NORMAL = 1000,
+	REAL_TIME = 500,
+	ALL = 0, // WARNING VSH
+
+};
 
 #define MAX(a, b)			((a) >= (b) ? (a) : (b))
 #define MIN(a, b)			((a) <= (b) ? (a) : (b))
 #define ABS(a)				(((a) < 0) ? -(a) : (a))
+// aldo had the same idea 
 #define RANGE(a, b, c)		((a) <= (b) ? (b) : (a) >= (c) ? (c) : (a))
 #define BETWEEN(a, b, c)	( ((a) <= (b)) && ((b) <= (c)) )
 #define ISDIGIT(a)			( ('0' <= (a)) && ((a) <= '9') )
@@ -66,7 +119,6 @@ typedef unsigned char byte;
 #define ISHEX(a)			(ISDIGIT(a) || BETWEEN('a', LCASE(a), 'f'))
 #define	INT32(a)			(*((u32*)(a)))
 #define LCASE(a)	(a | 0x20)
-#define GetPointer(X) *(int*)(X)
 #define NAMEOF(var) #var
 #define CREATE_DUMMY_STUB(ret_type, func_name, ...) \
     ret_type func_name(__VA_ARGS__) { \
@@ -86,71 +138,6 @@ typedef unsigned char byte;
         __nop(); \
         __nop(); \
     }
-
-
-
-
-
-double floord(double x) {
-	if (x < 0 && x != static_cast<int>(x)) {
-		return static_cast<int>(x) - 1;
-	}
-	else {
-		return static_cast<int>(x);
-	}
-}
-
-double mod(double a, double b) {
-	if (b == 0.0) {
-		return 0.0;
-	}
-	double result = a - b * floord(a / b);
-	return result;
-}
-template <typename T>
-struct property
-{
-
-private:
-	T value;
-public:
-	property(T v) {
-		this->value = v;
-	}
-	T getValue() {
-		return value;
-	}
-
-};
-
-
-typedef uint64_t any;
-enum THREAD_PRIORITY
-{
-	LOWEST = 3000,
-	BELOW_NORMAL = 2400,
-	LOW = 2000,
-	NORMAL = 1500,
-	ABOVE_NORMAL = 1000,
-	REAL_TIME = 500,
-	ALL = 0,
-
-};
-
-void asm_write_nop_ori(void* a) {
-	*(int*)a = 0x60000000;
-}
-
-
-int do_test_thread_inst(void(*fn)(uint64_t), const char* DebugName = "TestThread") {
-	thread t;
-	int errn = sys_ppu_thread_create(&t, fn, 0, 2000, 10000, 0, DebugName);
-	if (errn == 0) {
-		return t;
-	}
-	return errn;
-}
-
 
 struct point
 {
@@ -177,14 +164,42 @@ public:
 		return alt.X == X && alt.Y == Y;
 	}
 };
+
+double sfloor(double x) {
+	if (x < 0 && x != static_cast<int>(x)) {
+		return static_cast<int>(x) - 1;
+	}
+	else {
+		return static_cast<int>(x);
+	}
+}
+
+double smod(double a, double b) {
+	if (b == 0.0) {
+		return 0.0;
+	}
+	double result = a - b * sfloor(a / b);
+	return result;
+}
+
+void asm_write_nop_ori(void* a) {
+	*(int*)a = 0x60000000;
+}
+
+
+int do_test_thread_inst(void(*fn)(uint64_t), const char* DebugName = "TestThread") {
+	thread t;
+	int errn = sys_ppu_thread_create(&t, fn, 0, 2000, 10000, 0, DebugName);
+	if (errn == 0) {
+		return t;
+	}
+	return errn;
+}
+
 char memory(unsigned int offset) {
 	return *(unsigned char*)offset;
 }
 
-typedef unsigned char BYTE;
-typedef unsigned char* PBYTE;
-typedef void VOID;
-typedef void* PVOID;
 typedef wchar_t wchar;
 template <class T>
 uintptr_t this_stor(T* s) {
@@ -210,14 +225,6 @@ float toFloat(int input) {
 	float output = static_cast<float>(output_tmp);
 	return negative ? -output : output;
 }
-typedef unsigned char uchar;
-typedef unsigned int uint;
-typedef uint nzvint; // non zero integer.
-typedef uint32_t uint32;
-typedef uint64_t uint64;
-typedef uint32_t* uintaddr;
-typedef uint _DWORD;
-typedef uint address;
 
 void execute_stub_reference() {
 	__nop(); __nop(); __nop(); __nop(); __nop();
@@ -245,10 +252,6 @@ int format_float(char* buffer, float v) {
 	//int e = value % 10;
 	return _sys_snprintf(buffer, 32, "%i,%i%if", a, b, c);
 }
-
-
-
-
 int format_double(char* buffer, double v) {
 	const int factor = 100000;
 	int value = static_cast<int>(v * factor + 0.5f);
@@ -259,7 +262,6 @@ int format_double(char* buffer, double v) {
 	int e = value % 10;
 	return _sys_snprintf(buffer, 32, "%d.%i%i%i%i%i   ", a, b, c, d, e);
 }
-
 // Compares if data only atleast haves "data" in it, only compares the len of "comparing" inside "data"
 bool safest_compare(const char* data, const char* comparing) {
 	return !_sys_strncmp(comparing, data, _sys_strlen(comparing));
@@ -307,16 +309,11 @@ bool is_within_range(int r, int range) {
 void formatTime(char* buffer, size_t bufferSize, int hours, int minutes, int seconds) {
 	snprintf(buffer, bufferSize, "%02d:%02d:%02d", hours, minutes, seconds);
 }
+// cstring or null
 const char* getAMPM(int hour) {
-	if (hour >= 0 && hour < 12) {
-		return "AM";
-	}
-	else if (hour >= 12 && hour <= 23) {
-		return "PM";
-	}
-	else {
-		return "Invalid Hour";  // Return an error string for invalid input
-	}
+	if (hour >= 0 && hour < 12) {return "AM";}
+	else if (hour >= 12 && hour <= 23) {return "PM";}
+	else {return nullptr;}
 }
 struct interval
 {
@@ -518,8 +515,6 @@ static float get_firmware_version(void)
 	char FW[8]; sprintf(FW, "%02X", info.firmware_version);
 	return (float)(FW[0] & 0x0F) + val(FW + 2) * 0.00001f;
 }
-
-
 void print_byte(char* buffer, byte value) {
 	char lett[0x3];
 	if (value < 0x0A) {
@@ -533,9 +528,6 @@ void print_byte(char* buffer, byte value) {
 }
 
 
-
-
-int PATCHES_COUNT = 0;
 
 template <class TYPE_A>
 inline bool is(TYPE_A a, TYPE_A b) {
@@ -1286,7 +1278,7 @@ namespace HTTP
 
 		return diff;
 	}
-
+	// MEMORY WARNING, SHOULD UPDATE FOR USING 'SOCKET' INSTEAD
 	void SendRequest(char* url, char* retBuffer, int bufMaxLen) //url = url to request ("http://www.google.com/")    | retBuffer = ptr where the answer will be written to  | bufMaxLen = Max length of the buffer
 	{
 		if (bufMaxLen > 0x4000) { return; } //ERROR, bufMaxLen is TOO BIG
@@ -1389,7 +1381,10 @@ int CallInt(uintptr_t address, Instance* thisInst) {
 	return Call<int>(address, (uint)thisInst);
 }
 
-// std
+
+
+
+// NPUB31419 PRINTFW
 template <typename...arg>
 size_t printfw(wchar_t* buff, size_t sz, wchar_t* format, arg...s) {
 	// fucking linker error 
@@ -2478,105 +2473,6 @@ void printFloat(double value, char* buffer, int decimal_places) {
 
 
 
-namespace typeprinter {
-
-	const char* BOOL_LITERAL = "true";
-	const char* BOOL_LITERAL_FALSE = "false";
-
-	size_t printUint(char* buff, uint& v, bool zx) {
-		if (zx)
-			return snprintf(buff, 12, "0x%x", v);
-		else
-			return snprintf(buff, 12, "%x", v);
-	}
-	size_t printInt(char* buff, int& v) {
-		return snprintf(buff, 20, "%i", v);
-	}
-	size_t printStr(char* buff, char*& ptr, size_t sz = 64) {
-		return snprintf(buff, sz, "%s", ptr);
-	}
-	size_t printBool(char* buff, bool v, bool literal = false) {
-		if (literal)
-			return snprintf(buff, 5, "%s", (v ? BOOL_LITERAL : BOOL_LITERAL_FALSE));
-		else
-			return snprintf(buff, 2, "%i", v);
-	}
-	class printer {
-	private:
-		uintptr_t object = 0;
-		uintptr_t output = 0;
-		uint size;
-		template <typename T>
-		T as() {
-			return *(T*)object;
-		}
-		template<typename T>
-		T* asptr() {
-			return (T*)object;
-		}
-		char* getPointer() {
-			if (output == 0) {
-				return;
-			}
-			return (char*)output;
-		}
-		bool writable() {
-			return
-				output > 0 && object > 0 && size > 0;
-		}
-	public:
-		void setObject(void* o) {
-			object = fn(o);
-		}
-		void setOutput(char* o, size_t sz = 10) {
-			output = (uint)o;
-		}
-		void setBufferSize(size_t sz) {
-			this->size = sz;
-		}
-		void clear() {
-			_sys_memset(getPointer(), 0, size);
-		}
-		size_t printAsBool(bool literal) {
-			if (!writable()) {
-				return -1;
-			}
-
-			return typeprinter::printBool(getPointer(), as<bool>(), literal);
-		}
-		size_t printAsString() {
-			if (!writable()) {
-				return -1;
-			}
-			size_t sz = size;
-
-			char* ptr = asptr<char>();
-			uint t = _sys_strlen(ptr);
-			if (t < sz)
-			{
-				sz = t;
-			}
-			return typeprinter::printStr(getPointer(), ptr, t);
-		}
-		size_t printAsInteger() {
-			if (!writable()) {
-				return -1;
-			}
-			int val = as<int>();
-			return typeprinter::printInt(getPointer(), val);
-		}
-
-		size_t printAsUint(bool zx = false) {
-			if (!writable()) {
-				return -1;
-			}
-			uint val = as<uint>();
-			return typeprinter::printUint(getPointer(), val, zx);
-		}
-
-	};
-
-}
 std::string format_with_suffix(int& num) {
 	std::string suffix;
 	double formattedNumber = num;
@@ -2607,29 +2503,21 @@ std::string format_with_suffix(int& num) {
 }
 
 
-#ifndef null
-#define null 0;
-#endif // !null
-
-unsigned int seed;
+unsigned int _sys_seed;
 // Generates a pseudo-random integer in the range [0, RAND_MAX]
 int random() {
 	// LCG parameters (these values are just examples, and you may need to choose different values for better randomness)
 	const unsigned int a = 1664525;
 	const unsigned int c = 1013904223;
-	seed = a * seed + c;
+	_sys_seed = a * _sys_seed + c;
 
 	// Limit the range to [0, RAND_MAX]
-	return static_cast<int>(seed % (RAND_MAX + 1));
+	return static_cast<int>(_sys_seed % (RAND_MAX + 1));
 }
 #define thread_create sys_ppu_thread_create
 #define alloc _sys_malloc
 
 #pragma region OVERRIDE_NEW
-#pragma once
-#include <yvals.h> // for _CSTD
-#include <xstddef> // for _THROW1
-#include <new> // for nothrow_t
 void* operator new(std::size_t size) _THROW1(_XSTD bad_alloc) // allocate or throw exception
 {
 	return _sys_malloc(size);
@@ -2720,23 +2608,6 @@ int threaded(void(*entry), const char* name = "threaded_function") {
 	int errn = sys_ppu_thread_create(&t, [](uint64 f)->void{void(*s)() = (void(*)())f;s();}, (uint64)entry, 1500, 5000, 0, name);
 	return errn;
 }
-
-
-struct valuable
-{
-	int oldValue = 0;
-	int value = 0;
-	void operator=(int v) {
-		oldValue = value;
-		value = v;
-	}
-	valuable(int s) {
-		value = s;
-		CallToInstance<int>(0x0, this);
-	}
-};
-
-
 
 
 #define IMPORT_CALL_TO_INSTANCE(address, name, ret) \
