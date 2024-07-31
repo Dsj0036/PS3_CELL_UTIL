@@ -2623,3 +2623,6 @@ int threaded(void(*entry), const char* name = "threaded_function") {
 	const __ImportedCalls::func_name##_t func_name = reinterpret_cast<__ImportedCalls::func_name##_t>(__ImportedCalls::func_name##_opd);
 
 
+#define var(n,x)\
+ auto n = x;\
+
