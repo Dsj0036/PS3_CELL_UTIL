@@ -2,6 +2,7 @@
 // cool in a way
 // Should include for entire project.
 
+#include <stdarg.h>
 #include <sys/timer.h>
 #include <xstring>
 #include <cellstatus.h>
@@ -20,15 +21,15 @@
 #include <sys/memory.h>
 #include <sys/timer.h>
 #include <sys/types.h>
-#include <math.h>
-#include <fastmath.h>
+//#include <math.h>
+//#include <fastmath.h>
 #include <cellstatus.h>
 #include <sys/timer.h>
 #include <cell/sysmodule.h>
 #include <sys/random_number.h>
 #include <ppu_intrinsics.h>
 #include <spu_printf.h>
-#include <ctype.h>
+//#include <ctype.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/process.h>
@@ -40,9 +41,9 @@
 #include "cell/dbgrsx.h"
 // http
 #include "Types.h"
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
+// #include <string.h>
+// #include <stdio.h>
+// #include <stdlib.h>
 #include <cell/http.h>
 #include <netex/net.h>
 #include "cell/cell_fs.h"
@@ -50,12 +51,11 @@
 #include "cell/pad.h"
 
 
-
 // OVERRIDE ALLOCATION OPERATORS
 #include <yvals.h> // for _CSTD
 #include <xstddef> // for _THROW1
 #include <new> // for nothrow_t
-
+#include "wchar.h"
 
 
 typedef int ref;
@@ -73,6 +73,7 @@ typedef uint address;
 typedef uint64_t any;
 
 
+
 // delete for your project, dummy counter
 int PATCHES_COUNT = 0;
 
@@ -85,6 +86,9 @@ struct property
 private:
 	T value;
 public:
+	property() {
+		value = (T)nullptr;
+	}
 	property(T v) {
 		this->value = v;
 	}
@@ -119,6 +123,10 @@ enum THREAD_PRIORITY
 #define ISHEX(a)			(ISDIGIT(a) || BETWEEN('a', LCASE(a), 'f'))
 #define	INT32(a)			(*((u32*)(a)))
 #define LCASE(a)	(a | 0x20)
+#define NORMALIZED(x, min, max)(x - min) / (max - min)
+#define NORMALIZED2(x) (((x)<0.0) ? 0.0:1.0 )
+#define NORMALIZE32(x) (((x)<-1.0) ? -1.0: (((x) > 1.0)?1.0:x) )
+#define ast(type,x)\ ((type)(x))
 #define NAMEOF(var) #var
 #define CREATE_DUMMY_STUB(ret_type, func_name, ...) \
     ret_type func_name(__VA_ARGS__) { \
@@ -277,7 +285,9 @@ bool safest_endwith(const char* data, const char* end) {
 	// Ajustamos el puntero data a la posición correcta
 	return !_sys_strcmp(data + data_len - end_len, end);
 }
-
+bool safest_wide_compare(const wchar* data, const wchar* comparing) {
+	return std::wcsncmp(comparing, data, std::wcslen(comparing)) == 0;
+}
 
 
 int format_d1(char* buffer, double v) {
@@ -290,30 +300,19 @@ int format_d1(char* buffer, double v) {
 	int e = value % 10;
 	return _sys_snprintf(buffer, 32, "%i.%i", a, b, c, d, e);
 }
-template <typename T>
-short count(T* pointer, uint len) {
-	char i = 0;
-	short c = 0;
-	while (i < len) {
-		if (*(pointer + i) != 0) {
-			c++;
-		}
-		i++;
-	}
-	return c;
-}
+
 bool is_within_range(int r, int range) {
 	return abs(r) < range;
 }
 #pragma once
 void formatTime(char* buffer, size_t bufferSize, int hours, int minutes, int seconds) {
-	snprintf(buffer, bufferSize, "%02d:%02d:%02d", hours, minutes, seconds);
+	s_snprintf(buffer, bufferSize, "%02d:%02d:%02d", hours, minutes, seconds);
 }
 // cstring or null
 const char* getAMPM(int hour) {
-	if (hour >= 0 && hour < 12) {return "AM";}
-	else if (hour >= 12 && hour <= 23) {return "PM";}
-	else {return nullptr;}
+	if (hour >= 0 && hour < 12) { return "AM"; }
+	else if (hour >= 12 && hour <= 23) { return "PM"; }
+	else { return nullptr; }
 }
 struct interval
 {
@@ -518,10 +517,10 @@ static float get_firmware_version(void)
 void print_byte(char* buffer, byte value) {
 	char lett[0x3];
 	if (value < 0x0A) {
-		snprintf(lett, 3, "0%x", value);
+		s_snprintf(lett, 3, "0%x", value);
 	}
 	else {
-		snprintf(lett, 3, "%x", value);
+		s_snprintf(lett, 3, "%x", value);
 	}
 	_sys_strncpy(buffer, lett, 3);
 
@@ -683,7 +682,7 @@ char* format(const char* format, Arguments... s) {
 	short len = _sys_strlen(format);
 	short buffSz = len < 8 ? 8 : len < 16 ? 16 : len < 32 ? 32 : len < 64 ? 64 : len < 78 ? 78 : len < 86 ? 86 : len < 120 ? 120 : 128;
 	char* buff = (char*)malloc(buffSz);
-	snprintf(buff, buffSz, format, s...);
+	s_snprintf(buff, buffSz, format, s...);
 	return buff;
 }
 short ctoi(char v) {
@@ -1237,6 +1236,8 @@ bool hexStringToColor(const char* hexString, int* red, int* green, int* blue) {
 	return true;
 }
 
+#if false 
+
 namespace HTTP
 {
 #define __WEB_H
@@ -1359,6 +1360,7 @@ namespace HTTP
 		sys_net_finalize_network();
 	}
 }
+#endif
 
 char mem(int address, int index) {
 	return *(char*)(ca(address + (index)));
@@ -1675,7 +1677,7 @@ char* itoa(int index, int n) {
 	reverse(itoaBuff[index]);
 	return itoaBuff[index];
 }
-
+// This works ppu.
 void sys_sleep(uint64_t milliseconds)
 {
 	sys_timer_usleep(milliseconds * 1000);
@@ -1765,6 +1767,90 @@ const char* getFileExtension(const char* filename) {
 		return ""; // No extension found
 	}
 	return dot + 1; // Skip the dot itself
+}
+
+// Converts a wide character to UTF-8
+// Convierte un carácter ancho a UTF-8
+static void wcharToUtf8(wchar_t wchar, char* utf8Buffer, size_t bufferSize, size_t& written) {
+	if (wchar <= 0x7F) {
+		if (written + 1 < bufferSize) {
+			utf8Buffer[written++] = static_cast<char>(wchar);
+		}
+	}
+	else if (wchar <= 0x7FF) {
+		if (written + 2 < bufferSize) {
+			utf8Buffer[written++] = static_cast<char>(0xC0 | (wchar >> 6));
+			utf8Buffer[written++] = static_cast<char>(0x80 | (wchar & 0x3F));
+		}
+	}
+	else if (wchar <= 0xFFFF) {
+		if (written + 3 < bufferSize) {
+			utf8Buffer[written++] = static_cast<char>(0xE0 | (wchar >> 12));
+			utf8Buffer[written++] = static_cast<char>(0x80 | ((wchar >> 6) & 0x3F));
+			utf8Buffer[written++] = static_cast<char>(0x80 | (wchar & 0x3F));
+		}
+	}
+}
+
+// Converts a wide character string to UTF-8
+// Convierte una cadena de caracteres anchos a UTF-8
+static void wcharStringToUtf8(const wchar_t* wcharString, char* utf8Buffer, size_t bufferSize) {
+	size_t written = 0;
+	for (const wchar_t* wchar = wcharString; *wchar != L'\0'; ++wchar) {
+		wcharToUtf8(*wchar, utf8Buffer, bufferSize, written);
+	}
+	if (written < bufferSize) {
+		utf8Buffer[written] = '\0';
+	}
+}
+
+// Converts a UTF-8 character to a wide character
+// Convierte un carácter UTF-8 a un carácter ancho
+static wchar_t utf8ToWchar(char* utf8Char, size_t& bytesRead) {
+	unsigned char* uchar = reinterpret_cast<unsigned char*>(utf8Char);
+	wchar_t wchar = 0;
+
+	int bytesToRead = 1;
+	if ((*uchar & 0xF8) == 0xF0) {
+		bytesToRead = 4;
+		wchar = *uchar & 0x07;
+	}
+	else if ((*uchar & 0xF0) == 0xE0) {
+		bytesToRead = 3;
+		wchar = *uchar & 0x0F;
+	}
+	else if ((*uchar & 0xE0) == 0xC0) {
+		bytesToRead = 2;
+		wchar = *uchar & 0x1F;
+	}
+	else {
+		wchar = *uchar;
+	}
+
+	for (int i = 1; i < bytesToRead; ++i) {
+		wchar = (wchar << 6) | (uchar[i] & 0x3F);
+	}
+
+	bytesRead = bytesToRead;
+
+	return wchar;
+}
+
+// Converts a UTF-8 string to a wide character string
+// Convierte una cadena UTF-8 a una cadena de caracteres anchos
+static void utf8ToWcharString(char* utf8String, wchar_t* wcharBuffer, size_t wcharBufferSize) {
+	size_t bytesRead = 0;
+	size_t wcharIndex = 0;
+
+	while (*utf8String != '\0') {
+		wchar_t wchar = utf8ToWchar(utf8String, bytesRead);
+		if (wcharIndex < wcharBufferSize - 1) {
+			wcharBuffer[wcharIndex++] = wchar;
+		}
+		utf8String += bytesRead;
+	}
+
+	wcharBuffer[wcharIndex] = L'\0';
 }
 
 //Console Commands
@@ -1945,7 +2031,7 @@ namespace ps3
 	{
 		return *(int*)Address;
 	}
-	char* ReadString(int Address)
+	char* asString(int Address)
 	{
 		return (char*)Address;
 	}
@@ -1995,8 +2081,8 @@ void patcher(int Address, int Destination, bool Linked)
 		FuncBytes[3] += 1; // bctrl
 	Memcpy((void*)Address, FuncBytes, 4 * 4);
 }
-
-void hookfunction(uint32_t address, uint32_t patchedfunc, uint32_t patchstub, const char* id = "") {
+// Trampoline.
+void hookfunction(uint32_t address, uint32_t patchedfunc, uint32_t patchstub, ...) {
 	//ps3_writelineF("hook %x -> %x, %x, \"%s\"", functionStartAddress, newFunction, functionStub, id);
 	uint32_t normalFunctionStub[8], hookFunctionStub[4];
 	sys_dbg_read_process_memory_ps3mapi(address, normalFunctionStub, 0x10);
@@ -2115,11 +2201,11 @@ namespace vector3_parse {
 	}
 }
 #define itrcp hookfunction
-uint32_t fn(void* f) {
+uint32_t take(void* f) {
 	return *(uintaddr)f;
 }
 
-#define NADDR(var) (#var " " + fn(&var))
+#define NADDR(var) (#var " " + take(&var))
 char readStrWide[32];
 // 
 char* readWide(uint address, int len = 16) {
@@ -2457,9 +2543,10 @@ wchar_t* stackW(char* forBuffer, int& size) {
 	}
 	return nullptr;
 }
-
+#include "math.h"
 
 void printFloat(double value, char* buffer, int decimal_places) {
+
 	double int_part, frac_part;
 	frac_part = modf(value, &int_part);
 
@@ -2468,7 +2555,7 @@ void printFloat(double value, char* buffer, int decimal_places) {
 	long long_frac_part = fabs(frac_part * scale);
 
 	// Formatear como dos números enteros
-	snprintf(buffer, 100, "%d.%0*lld", (int)int_part, decimal_places, long_frac_part);
+	s_snprintf(buffer, 100, "%d.%0*lld", (int)int_part, decimal_places, long_frac_part);
 }
 
 
@@ -2487,16 +2574,16 @@ std::string format_with_suffix(int& num) {
 		suffix = "K";
 	}
 	else {
-		snprintf(buffer, 35, "%d", cast<double, int>(num));
+		s_snprintf(buffer, 35, "%d", cast<double, int>(num));
 		return std::string(buffer);
 	}
 
 	if (formattedNumber == static_cast<int>(formattedNumber)) {
-		snprintf(buffer, sizeof(buffer), "%d%s", static_cast<int>(formattedNumber), suffix.c_str());
+		s_snprintf(buffer, sizeof(buffer), "%d%s", static_cast<int>(formattedNumber), suffix.c_str());
 
 	}
 	else {
-		snprintf(buffer, sizeof(buffer), "%.1f%s", formattedNumber, suffix.c_str());
+		s_snprintf(buffer, sizeof(buffer), "%.1f%s", formattedNumber, suffix.c_str());
 	}
 	return std::string(buffer);
 
@@ -2605,7 +2692,7 @@ void operator delete[](void* ptr, size_t align, void* prt2)
 
 int threaded(void(*entry), const char* name = "threaded_function") {
 	uint64 t;
-	int errn = sys_ppu_thread_create(&t, [](uint64 f)->void{void(*s)() = (void(*)())f;s();}, (uint64)entry, 1500, 5000, 0, name);
+	int errn = sys_ppu_thread_create(&t, [](uint64 f)->void {void(*s)() = (void(*)())f; s(); }, (uint64)entry, 1500, 5000, 0, name);
 	return errn;
 }
 
@@ -2626,3 +2713,348 @@ int threaded(void(*entry), const char* name = "threaded_function") {
 #define var(n,x)\
  auto n = x;\
 
+#define or ||
+
+uint32_t _sys_bitwise_mix(uint32_t input) {
+	input = (input ^ 0xdeadbeef) + (input << 4);
+	input = input ^ (input >> 10);
+	input = input + (input << 7);
+	input = input ^ (input >> 13);
+	input = input + (input << 11);
+	input = input ^ (input >> 17);
+	return input;
+}
+
+
+uint getStrUid(char* a)
+{
+	uint r = 1;
+	byte b = 1;
+	int z = strlen(a);
+	for (int i = 0; i < z; i++)
+	{
+
+		byte m = (byte)(a[b] ^ (0x7 * b));
+		m = (byte)((m - (13 * b)) ^ (b + 3));
+		r += (uint)((m << 2) | (m >> 6));
+		b++;
+	}
+
+	return r;
+}
+template <std::size_t size, typename Array>
+uint explicitArraySize(Array(&array)[size]) {
+	return size;
+}
+
+
+
+
+template <typename T>
+class observable
+{
+private:
+	T data;
+public:
+	observable(T& data) {
+		this->data = data;
+	}
+
+	observable(T* data) {
+		if (data == nullptr) {
+			throw EINVAL;
+		}
+		this->data = *data;
+	}
+	const T get() {
+		return data;
+	}
+	int operator =(T* x) {
+		throw EINVAL;
+	}
+};
+template <typename T>
+class not_null
+{
+	observable<T> data;
+public:
+	not_null(T& d) : data(d) {
+	}
+	not_null(T* d) : data(d) {
+
+	}
+	T const get() {
+		return (data.get());
+	}
+	inline void set(const T* x) {
+		if (x == nullptr) {
+			throw EINVAL;
+		}
+		data = observable<T>(*x);
+	}
+
+};
+
+template <typename T>
+class collection {
+protected:
+	T* buffer;
+	int cap;
+	int cur;
+	void ensure_buffer() {
+		if (!buffer) {
+			sys_process_exit(EBUSY);
+		}
+	}
+
+public:
+
+	collection() {
+		buffer = (T*)_sys_malloc(sizeof(T) * 4);
+		ensure_buffer();
+		cap = 4;
+		cur = 0;
+		_sys_memset(buffer, 0, sizeof(T));
+	}
+	void push_back(T& a) {
+		int next = cur + 1;
+		if (next >= cap) {
+			int oldcap = cap;
+			cap *= 2;
+			auto cache = (T*)_sys_malloc(sizeof(T) * oldcap);
+			_sys_memset(cache, 0, sizeof(T) * oldcap);
+			_sys_memcpy(cache, buffer, sizeof(T) * oldcap);
+			_sys_memset(buffer, 0, sizeof(T) * oldcap);
+
+			delete buffer;
+			buffer = (T*)_sys_malloc(sizeof(T) * cap);
+			ensure_buffer();
+			_sys_memset(buffer, 0, sizeof(T) * cap);
+			_sys_memcpy(buffer, cache, sizeof(T) * oldcap);
+		}
+		buffer[cur] = a;
+		cur++;
+	}
+	// Size of the total types storable.
+	inline int size()const {
+		return sizeof(T) * cur;
+	}
+	void add(T el) {
+		push_back(el);
+	}
+	int count() const {
+		return cur;
+	}
+	T& at(int index) {
+		return buffer[index];
+	}
+	inline int capacity()const { return cap; }
+	// Predicate will be called with an first index, and a secondary data element by reference.
+	template <typename Predicate>
+	void foreach(Predicate act) {
+		for (int i = 0; i < cur; i++) {
+			act(i, buffer[i]);
+		}
+	}
+	// Predicate will be called with an first index, a secondary referred data element, and data pointer or value argument.
+	template <typename Predicate>
+	void foreach(Predicate act, uint32_t arg) {
+		for (int i = 0; i < cur; i++) {
+			act(i, buffer[i], arg);
+		}
+	}
+	void clear() {
+		ensure_buffer();
+		_sys_memset(buffer, 0, sizeof(T) * cap);
+		cur = 0;
+	}
+	int insert(int index, T* range, int size) {
+		clear();
+		for (int i = 0; i < size; i++) {
+			add(range[i]);
+			
+		}
+		cur = size;
+		return 1;
+	}
+	T* data() {
+		return buffer;
+	}
+	T& read() const {
+		return buffer[cur];
+	}
+	T read(int index)const {
+		return buffer[index];
+	}
+	// T* must have a correct size, for copying all, otherwise ill just not work.
+	void copy(T* output)const {
+		_sys_memcpy(output, buffer, sizeof(buffer) * cur);
+	}
+	// T must have a fixed or good equality operator
+	int find(T& value) {
+		int x = 0;
+		while (x < cur) {
+			if (buffer[x] == value) {
+				return x;
+				break;
+			}
+			x++;
+		}
+		return -1;
+	}
+	void pop_back() {
+		buffer[0] = (T)nullptr;
+		for (int i = 1; i < cap - 1; i++) {
+			buffer[i - 1] = buffer[i];
+		}
+	}
+	void pop_front() {
+		buffer[cur] = (T)nullptr;
+	}
+	T& operator[](int index) {
+		return at(index);
+	}
+	~collection() {
+		_sys_memset(buffer, 0, sizeof(T) * cap);
+		delete buffer;
+	}
+};
+
+class textBuffer
+{
+private:
+	collection<char> buff;
+public:
+	textBuffer(const char* t) {
+		buff = collection<char>();
+		buff.insert(0, (char*)t, strlen(t));
+		buff.add('\0');
+	}
+	textBuffer() {
+		set("\0");
+	}
+
+	textBuffer(const wchar* text) {
+		char buffer[256];
+		wcharStringToUtf8(text, buffer, 256);
+		set(buffer);
+	}
+	void clr() {
+		buff.clear();
+	}
+	void set(const char* text) {
+		clr();
+		buff.insert(0, (char*)text, strlen(text));
+		buff.add(0);
+	}
+
+	observable<collection<char>> get() {
+		return buff;
+	}
+	size_t len() {
+		return strlen((const char*)buff.data());
+	}
+	char& at(int index) {
+		return buff.at(index);
+	}
+	int find(char c) {
+		return buff.find(c);
+	}
+	int find(const char* data) {
+		auto dat = buff.data();
+		int x = buff.count();
+		int a = 0;
+		while (a < x) {
+			if (strncmp(data, dat + a, strlen(data)) == 0) {
+				return a;
+				break;
+			}
+			++a;
+		}
+		return -1;
+	}
+	char* raw() {
+		return buff.data();
+	}
+	template <typename ...Arguments>
+	static void byFormat(textBuffer& buff, char* frm, Arguments...s) {
+		char buffer[128];
+		s_snprintf(buffer, 128, frm, s...);
+
+		buff.set(buffer);
+	}
+
+};
+
+
+template <typename T>
+class queue {
+	collection<T> data;
+public:
+	queue() {
+		data = collection<T>();
+	}
+	void add(T& element) {
+		data.add(element);
+	}
+	void push(T element) {
+		add(element);
+	}
+	// Peeks the current queue without popping.
+	T& peek() {
+		return data.read();
+	}
+	// Pops the current queue and return the latest value.
+	T pop() {
+		T elm = data.read();
+		data.pop_front();
+		return elm;
+	}
+	int count() const {
+		return data.count();
+	}
+	int size()const {
+		return data.size();
+	}
+};
+
+
+template <typename Return, typename ...Arguments>
+class Trampoline
+{
+public:
+	Return(*function)(Arguments...) = nullptr;
+	Return(*replacement)(Arguments...) = nullptr;
+
+	static Return Call(Arguments...) {
+		__nop();
+		__nop();
+		__nop();
+		__nop();
+		__nop();
+	}
+
+	void Write(uint32_t originalFunctionAddress, Return(*replacement)(Arguments...)) {
+		Trampoline* x = (Trampoline*)(uint)(this);
+		hookfunction(originalFunctionAddress, take(replacement), take(x->Call));
+		function = (Return(*)(Arguments...))(originalFunctionAddress);
+		this->replacement = replacement;
+	}
+};
+#ifndef pair
+template <typename T, typename T2>
+struct pair_t
+{
+public:
+	T a;
+	T2 b;
+};
+#endif
+
+
+#define RAND_BY_TIME(uint_time) _sys_bitwise_mix(uint_time);
+#define __UNKNOWN_DATA private:
+#define TRUNC_DECIMALS(x) (floorf(x * 100) / 100.0)
+#define HIWORD(l) ((unsigned short)(((unsigned long)(l) >> 16) & 0xFFFF))
+#define LOWORD(l) ((unsigned short)((unsigned long)(l) & 0xFFFF))
+#define MAKELONG(low, high) ((unsigned long)(((unsigned short)(low)) | (((unsigned long)((unsigned short)(high))) << 16)))
