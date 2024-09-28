@@ -29,7 +29,6 @@ extern "C"
 
 }
 
-
 #define malloc _sys_malloc
 #define s_printf _sys_printf
 #define s_snprintf _sys_snprintf
@@ -42,4 +41,3 @@ extern "C"
 #define free _sys_free
 #define strleng _sys_strlen
 #define strcpy _sys_strcpy
-#pragma once

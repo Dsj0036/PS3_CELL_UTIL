@@ -1,7 +1,10 @@
 #pragma once
-#ifndef SYSTEM_H
+#ifndef __PS3_SYSTEM_UTILITIES__
 #include "System.h"
 #endif
+
+#ifndef __FILESYSTEM_H__
+#define __FILESYSTEM_H__
 std::string FS_GET_DIRECTORY_NAME(char* cs) {
 	std::string base(cs);
 	short index = base.find_last_of('/');
@@ -312,3 +315,5 @@ size_t FS_READ_WITH_OFFSET(char* file, char* data, const size_t size, int64_t of
 	}
 	return read_e;
 }
+
+#endif
