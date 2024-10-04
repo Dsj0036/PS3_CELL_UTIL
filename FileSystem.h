@@ -244,42 +244,42 @@ void FS_APPEND(int fd, char buff[] = 0, int size = 0) {
 }
 void FS_APPEND_STRING(char* file, char buf[] = 0)
 {
-	FS_APPEND(file, buf, strlen(buf), 0);
+	FS_APPEND(file, buf, sys::strlen(buf), 0);
 }
 void FS_APPEND_STRING(char* file, char buf[], void(*writeadd)(int fd))
 {
-	FS_APPEND(file, buf, strlen(buf), writeadd);
+	FS_APPEND(file, buf, sys::strlen(buf), writeadd);
 }
 void appendLines(char* file, char* lines[5]) {
 	int err;
 	int fd;
 	uint64_t nrw;
 	int ret;
-	int size = strlen(lines[0]);
+	int size = sys::strlen(lines[0]);
 	err = cellFsOpen(file, CELL_FS_O_RDWR | CELL_FS_O_APPEND | CELL_FS_O_CREAT, &fd, NULL, 0);
 	if (size != 0)
 		err = cellFsWrite(fd, (const void*)(lines[0]), (uint64_t)size, &nrw);
 	if (sizeof(lines[1]) > 0) {
-		int sz1 = strlen(lines[1]);
+		int sz1 = sys::strlen(lines[1]);
 		err = cellFsWrite(fd, (const void*)(lines[1]), (uint64_t)sz1, &nrw);
 	}
 	if (sizeof(lines[2]) > 0) {
-		int sz2 = strlen(lines[2]);
+		int sz2 = sys::strlen(lines[2]);
 		err = cellFsWrite(fd, (const void*)(lines[2]), (uint64_t)sz2, &nrw);
 	}
 
 	if (sizeof(lines[3]) > 0) {
-		int sz3 = strlen(lines[3]);
+		int sz3 = sys::strlen(lines[3]);
 		err = cellFsWrite(fd, (const void*)(lines[3]), (uint64_t)sz3, &nrw);
 	}
 
 	if (sizeof(lines[4]) > 0) {
-		int sz4 = strlen(lines[4]);
+		int sz4 = sys::strlen(lines[4]);
 		err = cellFsWrite(fd, (const void*)(lines[4]), (uint64_t)sz4, &nrw);
 	}
 
 	if (sizeof(lines[4]) > 0) {
-		int sz5 = strlen(lines[5]);
+		int sz5 = sys::strlen(lines[5]);
 		err = cellFsWrite(fd, (const void*)(lines[5]), (uint64_t)sz5, &nrw);
 	}
 	err = cellFsClose(fd);
@@ -288,7 +288,7 @@ static const char* get_ext(const char* path)
 {
 	if (!path || !(*path)) return path;
 
-	const int len = strlen(path);
+	const int len = sys::strlen(path);
 	const char* ext = path + len - 1;
 	const char* end = ext - ((*ext == ']') ? 13 : 6); // search limit 6 or 13 chars
 	if (*ext == '0') ext--;

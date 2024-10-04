@@ -41,7 +41,7 @@
 #include "cell/cell_fs.h"
 #include <cell/http.h>
 #include <../PS3_CELL_UTIL/Interop.h>
-
+#include "sys\tty.h"
 #include <stdarg.h>
 #include <xstring>
 #include <stdio.h>
@@ -144,6 +144,7 @@
 
 #define or ||
 
+#define Import using namespace 
 #define TRACED_HOOK(opaddr, name, id, whenCalled)\
 namespace TracedHook_name{\
 CREATE_DUMMY_STUB(any, patched_stub_##name, ...);\
@@ -207,6 +208,7 @@ int PATCHES_COUNT = 0;
 
 #pragma endregion
 
+#define RETNAMEOFINCASE(x) case x: return #x; break
 #define breakreturn(x) return x; break
 namespace sys {
 	uint strlen(const char* x) does(_sys_strlen(x));
@@ -254,12 +256,94 @@ namespace sys {
 
 
 	template <typename ...args> int printf(const char* format, args...x) does(_sys_printf(format, x...));
-	template <typename ...args> int snprintf(const char* format, size_t num, args...x) does(sys::snprintf(format, num, x...));
+	template <typename ...args> int snprintf(char* buff, size_t num, const char* frm, args...x) does(_sys_snprintf(buff, num,frm, x...));
 	int strncat(char* dest, char* src, size_t num)  does(_sys_strncat(dest, src, num));
 	int strchr(char* src, int ch)  does(_sys_strrchr(src, ch));
 	int tolower(int c) does(return _sys_tolower(c));
 	int toupper(int c) does(return _sys_toupper(c));
 	template <typename ...args> int sprintf(char* buf, char* format, args...x) does(return _sys_sprintf(buf, format, x..));
+	double stod(const char* str) {
+		double result = 0.0f;
+		double factor = 1.0f;
+		bool negative = false;
+		bool decimalPointEncountered = false;
+		float decimalFactor = 0.1f;
+
+		// !! Ensure skipping leading spaces otherwises it will always return 0.0
+		while (*str == ' ') {
+			str++;
+		}
+		if (*str == '-') {
+			negative = true;
+			str++;
+		}
+		while (*str != '\0') {
+			if (*str == '.') {
+				decimalPointEncountered = true;
+			}
+			else if (*str >= '0' && *str <= '9') {
+				if (decimalPointEncountered) {
+					result += (*str - '0') * decimalFactor;
+					decimalFactor *= 0.1f; 
+				}
+				else {
+					result = result * 10.0f + (*str - '0');
+				}
+			}
+			else {
+				break;  
+			}
+			str++;
+		}
+		if (negative) {
+			result = -result;
+		}
+
+		return result;
+	}
+	/// <summary>
+	/// Parse Dot Floating Value String
+	/// </summary>
+	/// <param name="str"></param>
+	/// <returns></returns>
+	float stof(const char* str) {
+		float result = 0.0f;
+		float factor = 1.0f;
+		bool negative = false;
+		bool decimalPointEncountered = false;
+		float decimalFactor = 0.1f;
+		// !! Ensure skipping leading spaces otherwises it will always return 0.0
+		while (*str == ' ') {
+			str++;
+		}
+		if (*str == '-') {
+			negative = true;
+			str++;
+		}
+		while (*str != '\0') {
+			if (*str == '.') {
+				decimalPointEncountered = true;
+			}
+			else if (*str >= '0' && *str <= '9') {
+				if (decimalPointEncountered) {
+					result += (*str - '0') * decimalFactor;
+					decimalFactor *= 0.1f;
+				}
+				else {
+					result = result * 10.0f + (*str - '0');
+				}
+			}
+			else {
+				break;
+			}
+			str++;
+		}
+		if (negative) {
+			result = -result;
+		}
+
+		return result;
+	}
 }
 
 
@@ -874,7 +958,7 @@ bool str_contain(const char* str, const char* word) {
 	// The word was not found
 	return false;
 }
-int is_char_letter(char c)
+bool is_char_letter(char c)
 {
 	if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
 		return true;
