@@ -1,8 +1,7 @@
 #pragma once
-#pragma once
-#pragma once
 #include "math.h"
 #include "cmath"
+#if false
 typedef struct Vector2
 {
 	float x, y;
@@ -312,8 +311,8 @@ float calculateAngle(Vector3 from, Vector3 to) {
 	float dotProduct = from.x * to.x + from.z * to.z;
 
 
-	float magnitudeFrom = nsqrtf(from.x * from.x + from.z * from.z);
-	float magnitudeTo = nsqrtf(to.x * to.x + to.z * to.z);
+	float magnitudeFrom = s_iterative_sqrt(from.x * from.x + from.z * from.z);
+	float magnitudeTo = s_iterative_sqrt(to.x * to.x + to.z * to.z);
 
 	float angleRad = Math::acos(dotProduct / (magnitudeFrom * magnitudeTo));
 	return Math::RadiansToDegrees(angleRad);
@@ -452,7 +451,7 @@ public:
 		Sprite = rect;
 	}
 	// prints this instance to an string pointer (64 bytes)
-	void toString(char* cstr) {
+	void ToString(char* cstr) {
 
 
 		s_snprintf(cstr, 64, "Vertex (xfloat) UVs: %x|%i|%i|%i",
@@ -488,3 +487,4 @@ public:
 			w(endY);
 	}
 };
+#endif

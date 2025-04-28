@@ -28,16 +28,54 @@ extern "C"
 	int		_sys_toupper(int c);
 
 }
+namespace sys {
+	static inline bool isalpha(int ch) {
+		return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+	}
+	static inline bool isnum(int ch) {
+		return (ch >= '0' && ch <= '9');
+	}
+	static inline bool isalnum(int ch) {
+		return isalpha(ch) || isnum(ch);
+	}
+	template<typename T>
+	static inline bool tryset(T*& nullable, const T& val) {
+		if (nullable)
+			*nullable = val;
+		return nullable != nullptr;
+	}
+	template<typename T>
+	static inline bool tryset(T** nullable, T* val) {
+		if (nullable) {
+			if (!*nullable) {
+				*nullable = val;
+			}
+		}
+		return nullable != nullptr;
+	}
+
+	template<typename T>
+	static inline void safedelete(T** nullable) {
+		if (nullable) {
+			if (!*nullable) {
+				delete* nullable;
+				*nullable = nullptr;
+			}
+		}
+		
+	}
+}
+
 
 //#define malloc _sys_malloc
 #define s_printf _sys_printf
 #define s_snprintf _sys_snprintf
-#define strncat _sys_strncat
-#define strrchr _sys_strrchr
-#define tolower _sys_tolower
-#define toupper _sys_toupper
-#define strncmp _sys_strncmp
-#define sprintf _sys_sprintf
+//#define strncat _sys_strncat
+//#define strrchr _sys_strrchr
+//#define tolower _sys_tolower
+//#define toupper _sys_toupper
+//#define strncmp _sys_strncmp
+//#define sprintf _sys_sprintf
 //#define free _sys_free
 #define strleng _sys_strlen
-#define strcpy _sys_strcpy
+//#define strcpy _sys_strcpy
