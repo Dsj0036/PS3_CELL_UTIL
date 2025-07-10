@@ -311,8 +311,8 @@ float calculateAngle(Vector3 from, Vector3 to) {
 	float dotProduct = from.x * to.x + from.z * to.z;
 
 
-	float magnitudeFrom = s_iterative_sqrt(from.x * from.x + from.z * from.z);
-	float magnitudeTo = s_iterative_sqrt(to.x * to.x + to.z * to.z);
+	float magnitudeFrom = _sisqrt(from.x * from.x + from.z * from.z);
+	float magnitudeTo = _sisqrt(to.x * to.x + to.z * to.z);
 
 	float angleRad = Math::acos(dotProduct / (magnitudeFrom * magnitudeTo));
 	return Math::RadiansToDegrees(angleRad);

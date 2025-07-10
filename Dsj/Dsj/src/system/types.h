@@ -1,0 +1,33 @@
+#pragma once
+#include <sys\sys_types.h>
+typedef int ref;
+typedef unsigned int uref;
+typedef sys_ppu_thread_t thread;
+typedef char sbyte;
+typedef unsigned short ushort;
+typedef unsigned char byte;
+typedef unsigned char uchar;
+typedef unsigned int uint;
+typedef unsigned long ulong;
+typedef float single;
+typedef double decimal;
+typedef uint32_t uint32;
+typedef uint64_t uint64;
+typedef byte* byte_ptr;
+typedef uint32_t* uint_ptr;
+typedef uint _DWORD;
+typedef bool BOOL;
+typedef unsigned long long _QWORD;
+typedef short _WORD;
+typedef byte _BYTE;
+typedef uint address;
+typedef uint64_t any;
+typedef int i32;
+typedef int64_t i64;
+typedef uint u32;
+typedef uint64_t u64;
+typedef int32_t Int32;
+typedef int64_t Int64;
+typedef uint64_t Uint64;
+typedef uint32_t Uint32;
+typedef wchar_t wchar;

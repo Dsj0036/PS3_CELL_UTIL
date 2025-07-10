@@ -1,0 +1,30 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35222.181
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DevEnv", "DevEnv\DevEnv.vcxproj", "{DD6E4B32-0E43-40F1-B33F-285A7ED30BCF}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ps3_library", "..\ppu_keyboard_test\ppu_keyboard_test\ppu_keyboard_test.vcxproj", "{AFBF1B4E-58B0-4839-BA00-E31D1656C0BC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|PS3 = Debug|PS3
+		Release|PS3 = Release|PS3
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DD6E4B32-0E43-40F1-B33F-285A7ED30BCF}.Debug|PS3.ActiveCfg = Debug|PS3
+		{DD6E4B32-0E43-40F1-B33F-285A7ED30BCF}.Debug|PS3.Build.0 = Debug|PS3
+		{DD6E4B32-0E43-40F1-B33F-285A7ED30BCF}.Release|PS3.ActiveCfg = Release|PS3
+		{DD6E4B32-0E43-40F1-B33F-285A7ED30BCF}.Release|PS3.Build.0 = Release|PS3
+		{AFBF1B4E-58B0-4839-BA00-E31D1656C0BC}.Debug|PS3.ActiveCfg = Debug|PS3
+		{AFBF1B4E-58B0-4839-BA00-E31D1656C0BC}.Release|PS3.ActiveCfg = Release|PS3
+		{AFBF1B4E-58B0-4839-BA00-E31D1656C0BC}.Release|PS3.Build.0 = Release|PS3
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6DAE61A2-DF02-463B-B9B7-25E11E236F6E}
+	EndGlobalSection
+EndGlobal

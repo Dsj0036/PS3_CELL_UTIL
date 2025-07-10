@@ -1,0 +1,18 @@
+﻿  default_traits.cpp
+  decimal4.cpp
+  ivec.cpp
+  rectangle.cpp
+C:\Users\debug\source\repos\DevEnv\DevEnv\src\math\rectangle.cpp(166,15): warning 432: returning reference to local temporary
+  
+  core.cpp
+C:\Users\debug\source\repos\DevEnv\DevEnv\src\system\core.cpp(105,19): warning 178: function "sys::usleep" was declared but never referenced
+  
+C:\Users\debug\source\repos\DevEnv\DevEnv\src\system\core.cpp(109,19): warning 178: function "sys::sleep" was declared but never referenced
+  
+C:\Users\debug\source\repos\DevEnv\DevEnv\src\system\core.cpp(113,19): warning 178: function "sys::sleepMs" was declared but never referenced
+  
+  formatter.inl
+C:\Users\debug\source\repos\DevEnv\DevEnv\src\system\formatter.inl(12,13): warning 693: "CStringBuilder::CStringBuilder(const CStringBuilder &)" (declared at line 62 of "C:\Users\debug\source\repos\DevEnv\DevEnv\src\system\..\incl\TCSB.h"), required for copy that was eliminated, is inaccessible
+  
+  util.cpp
+  DevEnv.vcxproj -> C:\Users\debug\source\repos\DevEnv\PS3_Debug\pllx.self

@@ -137,6 +137,8 @@ static int32_t HOOK_COUNT = 0;
 #define PATCHES_DEPENDANT
 #endif
 
+
+
 #ifndef RAND_MAX
 #define RAND_MAX	0x3fffffff
 #endif
@@ -170,6 +172,7 @@ static int32_t HOOK_COUNT = 0;
 
 #undef assert
 #define assert(condition) _internal_assert(condition, __LINE__, __FILE__, #condition)
+
 
 #define RAND_BY_TIME(uint_time) _sys_bitwise_mix(uint_time);
 
@@ -209,6 +212,18 @@ static int32_t HOOK_COUNT = 0;
 
 #define does(x) { x; }
 
+/// @brief Defines a dummy function stub with a given return type and name.
+/// @details This stub contains 5 NOP instructions, acting as placeholder code
+///          which can later be patched or replaced at runtime.
+/// 
+/// @param ret_type The return type of the function.
+/// @param func_name The name of the function to generate.
+/// @param ... The parameter list for the function (use like a regular prototype).
+///
+/// @example
+///     CREATE_DUMMY_STUB(void, DummyFunc, int a, float b);
+///     // Generates:
+///     // void DummyFunc(int a, float b) { __nop(); __nop(); ... }
 #define CREATE_DUMMY_STUB(ret_type, func_name, ...) \
     ret_type func_name(__VA_ARGS__) { \
         __nop(); \
@@ -219,6 +234,19 @@ static int32_t HOOK_COUNT = 0;
     }
 
 
+
+/// @brief Defines a static dummy function stub.
+/// @details Identical to CREATE_DUMMY_STUB, but the function is declared as static,
+///          meaning its scope is limited to the current translation unit (file).
+///
+/// @param ret_type The return type of the function.
+/// @param func_name The static function name to define.
+/// @param ... The parameter list for the function.
+///
+/// @example
+///     CREATE_DUMMY_STATIC_STUB(int, StaticStub, const char* msg);
+///     // Generates:
+///     // static int StaticStub(const char* msg) { __nop(); __nop(); ... }
 #define CREATE_DUMMY_STATIC_STUB(ret_type, func_name, ...) \
     static ret_type func_name(__VA_ARGS__) { \
         __nop(); \
@@ -227,6 +255,21 @@ static int32_t HOOK_COUNT = 0;
         __nop(); \
         __nop(); \
     }
+
+
+/// @brief Shorthand macro for creating a static dummy stub with a fixed return type.
+/// @details This macro simplifies the creation of a static stub intended to act as a
+///          restoration trampoline, typically used in runtime patching or code restoration.
+///          The stub uses int as return type and accepts variadic arguments.
+/// 
+/// @param NAME The function name of the trampoline.
+///
+/// @example
+///     RESTORATION_TRAMPOLINE(MyPatchRestore);
+///     // Expands to:
+///     // static int MyPatchRestore(...) { __nop(); __nop(); ... }
+#define RESTORATION_TRAMPOLINE(NAME) CREATE_DUMMY_STATIC_STUB(int, NAME, ...)
+
 
 #define CASE_RETURN(x, v) case x: return v; break
 
@@ -262,6 +305,12 @@ typedef int32_t Int32;
 typedef int64_t Int64;
 typedef uint64_t Uint64;
 typedef uint32_t Uint32;
+typedef wchar_t wchar;
+
+struct OPDEntry {
+	void* func;
+	void* toc;
+};
 
 struct uint128 {
 public:
@@ -369,154 +418,8 @@ enum THREAD_PRIORITY
 
 };
 
-struct point2i
-{
-public:
-	point2i() {}
-	point2i(int x, int y) : X(x), Y(y) {
-	}
-	point2i(bool isBoolean) { if (isBoolean) { X = 0; Y = 1; } }
-	int X{ 0 };
-	int Y{ 0 };
-	point2i Append(int x, int y)
-	{
-		return point2i(X + x, Y + y);
-	}
-	point2i Append(point2i increment) {
-		return point2i(X + increment.X, Y + increment.Y);
-	}
-	bool operator == (const point2i& alt) {
-		return alt.X == X && alt.Y == Y;
-	}
-};
-
-template <typename T>
-class not_null
-{
-	T* data;
-public:
-	not_null(T& d) : data(d) {
-	}
-	not_null(T* d) : data(d) {
-
-	}
-	T const get() {
-		return (data.get());
-	}
-	inline void set(const T* x) {
-		if (x == nullptr) {
-			throw EINVAL;
-		}
-		data = x;
-	}
-
-};
-
-template <typename Return, typename ...Arguments>
-class Trampoline
-{
-public:
-	Return(*function)(Arguments...) = nullptr;
-	Return(*replacement)(Arguments...) = nullptr;
-
-	static Return Call(Arguments...) {
-		__nop();
-		__nop();
-		__nop();
-		__nop();
-		__nop();
-	}
-
-	void Write(uint32_t originalFunctionAddress, Return(*replacement)(Arguments...)) {
-		Trampoline* x = (Trampoline*)(uint)(this);
-		hookfunction(originalFunctionAddress, replacement, x->Call);
-		function = (Return(*)(Arguments...))(originalFunctionAddress);
-		this->replacement = replacement;
-	}
-};
 
 
-class allocation {
-	const std::size_t storedSize;
-	byte* data;
-public:
-
-	bool notNull() {
-		return data != nullptr;
-	}
-	uintptr_t getPtr() {
-		return reinterpret_cast<uintptr_t>(data);
-	}
-	template <typename T>
-	T* const as() {
-		return (T*)data;
-	}
-	const std::size_t getStorageSize() {
-		return storedSize;
-	}
-	void clear() {
-		_sys_memset(data, 0, storedSize);
-	}
-	allocation(std::size_t size) :storedSize(size) {
-		data = (byte*)_sys_malloc(size);
-	}
-	~allocation() {
-		_sys_free(data);
-	}
-};
-
-void* operator"" _ptr(unsigned long long value) {
-	return reinterpret_cast<void*>(static_cast<uintptr_t>(value));
-}
-
-void defaultStub(...) {
-	__nop();
-	__nop();
-	__nop();
-	__nop();
-	__nop();
-}
-
-
-
-typedef struct vto
-{
-	vto(uintptr_t ptr) {
-		this->type_opd = *(vto**)ptr;
-	}
-	vto* type_opd;
-	void** func;
-
-
-} virtual_table_opd;
-struct asm_li_t {
-	short asm_;
-	short value_;
-
-
-};
-struct li_ptr {
-	li_ptr() {
-
-	}
-	li_ptr(uintptr_t x) {
-		li = (asm_li_t*)x;
-	}
-
-	asm_li_t* li;
-	short getValue() {
-		return li->value_;
-	}
-	void setValue(short value) {
-		li->value_ = value;
-	}
-};
-// delete for your project, dummy counter
-#pragma endregion
-
-
-
-#pragma endregion
 
 struct local_time_t {
 	short year; byte month, day, hour, minute, second;
@@ -632,7 +535,8 @@ struct utc_t {
 		}
 	}
 };
-inline int ctoint(char c) {
+
+inline int ctoi(char c) {
 	return c - '0';
 }
 
@@ -642,13 +546,13 @@ bool parse_local_time(const char* timeStr, local_time_t& outTime) {
 		timeStr[13] != ':' || timeStr[16] != ':' || (timeStr[19] != 'A' && timeStr[19] != 'P') || timeStr[20] != 'M') {
 		return false;
 	}
-	outTime.month = ctoint(timeStr[0]) * 10 + ctoint(timeStr[1]);
-	outTime.day = ctoint(timeStr[3]) * 10 + ctoint(timeStr[4]);
-	outTime.year = ctoint(timeStr[6]) * 1000 + ctoint(timeStr[7]) * 100 +
-		ctoint(timeStr[8]) * 10 + ctoint(timeStr[9]);
-	outTime.hour = ctoint(timeStr[12]) * 10 + ctoint(timeStr[13]);
-	outTime.minute = ctoint(timeStr[15]) * 10 + ctoint(timeStr[16]);
-	outTime.second = ctoint(timeStr[18]) * 10 + ctoint(timeStr[19]);
+	outTime.month = ctoi(timeStr[0]) * 10 + ctoi(timeStr[1]);
+	outTime.day = ctoi(timeStr[3]) * 10 + ctoi(timeStr[4]);
+	outTime.year = ctoi(timeStr[6]) * 1000 + ctoi(timeStr[7]) * 100 +
+		ctoi(timeStr[8]) * 10 + ctoi(timeStr[9]);
+	outTime.hour = ctoi(timeStr[12]) * 10 + ctoi(timeStr[13]);
+	outTime.minute = ctoi(timeStr[15]) * 10 + ctoi(timeStr[16]);
+	outTime.second = ctoi(timeStr[18]) * 10 + ctoi(timeStr[19]);
 	outTime.isPM = (timeStr[19] == 'P');
 	return true;
 }
@@ -659,21 +563,40 @@ bool parse_utc_time(const char* utcStr, utc_t& outTime) {
 		utcStr[13] != ':' || utcStr[16] != ':' || utcStr[19] != '.' || utcStr[23] != 'Z') {
 		return false;
 	}
-	outTime.year = ctoint(utcStr[0]) * 1000 + ctoint(utcStr[1]) * 100 +
-		ctoint(utcStr[2]) * 10 + ctoint(utcStr[3]);
+	outTime.year = ctoi(utcStr[0]) * 1000 + ctoi(utcStr[1]) * 100 +
+		ctoi(utcStr[2]) * 10 + ctoi(utcStr[3]);
 
-	outTime.month = ctoint(utcStr[5]) * 10 + ctoint(utcStr[6]);
-	outTime.day = ctoint(utcStr[8]) * 10 + ctoint(utcStr[9]);
+	outTime.month = ctoi(utcStr[5]) * 10 + ctoi(utcStr[6]);
+	outTime.day = ctoi(utcStr[8]) * 10 + ctoi(utcStr[9]);
 
-	outTime.hour = ctoint(utcStr[11]) * 10 + ctoint(utcStr[12]);
-	outTime.minute = ctoint(utcStr[14]) * 10 + ctoint(utcStr[15]);
-	outTime.second = ctoint(utcStr[17]) * 10 + ctoint(utcStr[18]);
+	outTime.hour = ctoi(utcStr[11]) * 10 + ctoi(utcStr[12]);
+	outTime.minute = ctoi(utcStr[14]) * 10 + ctoi(utcStr[15]);
+	outTime.second = ctoi(utcStr[17]) * 10 + ctoi(utcStr[18]);
 
-	outTime.millisecond = ctoint(utcStr[20]) * 100 + ctoint(utcStr[21]) * 10 + ctoint(utcStr[22]);
+	outTime.millisecond = ctoi(utcStr[20]) * 100 + ctoi(utcStr[21]) * 10 + ctoi(utcStr[22]);
 
 	return true;
 }
 namespace sys {
+	template<typename T>
+	struct iter {
+		T* _ptr;
+		size_t _size = 0;
+
+		template<size_t N>
+		iter(T(&array)[N]) : _ptr(array), _size(N) {}
+
+		iter(T* ptr, size_t num) : _ptr(ptr), _size(num) {}
+
+		T* begin() { return _ptr; }
+		const T* begin() const { return _ptr; }
+		T* end() { return _ptr + _size; }
+		const T* end() const { return _ptr + _size; }
+
+		size_t size() const { return _size; }
+		T& operator[](size_t i) { return _ptr[i]; }
+		const T& operator[](size_t i) const { return _ptr[i]; }
+	};
 	void* memalign(size_t boundary, size_t size) {
 		return _sys_memalign(boundary, size);
 	}
@@ -716,7 +639,33 @@ namespace sys {
 	void* memset(void* srcDest, int value, size_t len) does(return _sys_memset(srcDest, value, len));
 	char* strncpy(char* srcDest, const char* srcSrc, size_t srcSize) does(return _sys_strncpy(srcDest, srcSrc, srcSize));
 	char* strcpy(char* srcDest, const char* srcSrc) does(return _sys_strcpy(srcDest, srcSrc));
+
+
 	int strncmp(const char* srcDest, const char* srcSrc, size_t srcSize) does(return _sys_strncmp(srcDest, srcSrc, srcSize));
+
+	int _strcmp(const char* s1, const char* s2) {
+		while (*s1 && (*s1 == *s2)) {
+			++s1;
+			++s2;
+		}
+		return *(unsigned char*)s1 - *(unsigned char*)s2;
+	}
+
+	const char* strstr_array(const char* const strings[], const char* target, int count, bool matchCase) {
+		if (!strings || !target || count <= 0)
+			return nullptr;
+		int targetLen = sys::strlen(target);
+		for (int i = 0; i < count; ++i) {
+			if (!strings[i]) continue;
+			bool matched = matchCase
+				? sys::strncmp(strings[i], target, targetLen) == 0
+				: std::strncasecmp(strings[i], target, targetLen) == 0;
+			if (matched)
+				return strings[i];
+		}
+		return nullptr;
+	}
+
 	int wcsncmp(const wchar_t* a, const wchar_t* b, size_t size) {
 		if (size <= 0) {
 			return EINVAL;
@@ -854,6 +803,13 @@ namespace sys {
 	T&& move(T& arg) {
 		return static_cast<T&&>(arg);
 	}
+	static std::string trim(const std::string& s) {
+		const char* ws = " \t\r\n";
+		size_t start = s.find_first_not_of(ws);
+		size_t end = s.find_last_not_of(ws);
+		return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
+	}
+
 
 }
 
@@ -920,7 +876,7 @@ To cast(From v) {
 	return static_cast<To>(v);
 }
 
-double sfloor(double x) {
+double _dfloor(double x) {
 	if (x < 0 && x != static_cast<int>(x)) {
 		return static_cast<int>(x) - 1;
 	}
@@ -929,23 +885,21 @@ double sfloor(double x) {
 	}
 }
 
-double smod(double a, double b) {
+double _dmod(double a, double b) {
 	if (b == 0.0) {
 		return 0.0;
 	}
-	double result = a - b * sfloor(a / b);
+	double result = a - b * _dfloor(a / b);
 	return result;
 }
 
 void asm_write_nop_ori(void* a) {
-	*(int*)a = 0x60000000;
+	*(uint32_t*)a = 0x60000000;
 }
-template <typename whatever_t>
-uintptr_t asUint(whatever_t* x) {
-	return (uint)x;
+void asm_write_nop_ori(uint32_t a) {
+	*(uint32_t*)a = 0x60000000;
 }
 
-typedef wchar_t wchar;
 template <class T>
 uintptr_t this_stor(T* s) {
 	return (unsigned int)s;
@@ -970,45 +924,31 @@ float toFloat(int input) {
 	float output = static_cast<float>(output_tmp);
 	return negative ? -output : output;
 }
-float H2F(uint32_t value) {
+// Convert a 32-bit unsigned integer to a float
+float _ufloat(uint32_t value) {
 	return *(float*)(byte*)&(value);
 }
-float get_decimal(float number) {
+
+
+float _gdecimal(float number) {
 	int integerPart = static_cast<int>(number);
 	float fractional = number - integerPart;
 	float decimal = fractional * 10;
 	return decimal;
 }
-int timecode_to_frames(int fps, int h, int m, int s) {
+int _timecode_to_frames(int fps, int h, int m, int s) {
 	return (h * fps * 3600) + (m * fps * 60) + (s * fps);
 }
-int format_float(char* buffer, float v) {
-	const int factor = 100000;
-	int value = static_cast<int>(v * factor + 0.5f);
-	int a = value / 10000;
-	int b = (value / 1000) % 10;
-	int c = (value / 100) % 10;
-	b = b < 0 ? 0 : b;
-	c = c < 0 ? 0 : c;
-	//int d = (value / 10) % 10;
-	//int e = value % 10;
-	return _sys_snprintf(buffer, 32, "%i,%i%if", a, b, c);
-}
-int format_double(char* buffer, double v) {
-	const int factor = 100000;
-	int value = static_cast<int>(v * factor + 0.5f);
-	int a = value / 10000;
-	int b = (value / 1000) % 10;
-	int c = (value / 100) % 10;
-	int d = (value / 10) % 10;
-	int e = value % 10;
-	return _sys_snprintf(buffer, 32, "%d.%i%i%i%i%i   ", a, b, c, d, e);
-}
 // Compares if data only atleast haves "data" in it, only compares the len of "comparing" inside "data"
-bool safest_compare(const char* data, const char* comparing) {
-	return !_sys_strncmp(comparing, data, _sys_strlen(comparing));
+bool _sstartswith(const char* data, const char* comparing) {
+	while (*comparing) {
+		if (*data++ != *comparing++)
+			return false;
+	}
+	return true;
 }
-bool safest_endwith(const char* data, const char* end) {
+
+bool _endsWith(const char* data, const char* end) {
 	size_t data_len = _sys_strlen(data);
 	size_t end_len = _sys_strlen(end);
 
@@ -1017,48 +957,14 @@ bool safest_endwith(const char* data, const char* end) {
 	}
 	return !_sys_strcmp(data + data_len - end_len, end);
 }
-bool safest_wide_compare(const wchar* data, const wchar* comparing) {
+bool _wsequals(const wchar* data, const wchar* comparing) {
 	return std::wcsncmp(comparing, data, std::wcslen(comparing)) == 0;
 }
-int format_d1(char* buffer, double v) {
-	const int factor = 100000;
-	int value = static_cast<int>(v * factor + 0.5f);
-	int a = value / 10000;
-	int b = (value / 1000) % 10;
-	int c = (value / 100) % 10;
-	int d = (value / 10) % 10;
-	int e = value % 10;
-	return _sys_snprintf(buffer, 32, "%i.%i", a, b, c, d, e);
-}
-bool is_within_range(int r, int range) {
+bool _absSmallerThan(int r, int range) {
 	return abs((double)r) < range;
 }
-void formatTime(char* buffer, size_t bufferSize, int hours, int minutes, int seconds) {
-	s_snprintf(buffer, bufferSize, "%02d:%02d:%02d", hours, minutes, seconds);
-}
-const char* getAMPM(int hour) {
-	if (hour >= 0 && hour < 12) { return "AM"; }
-	else if (hour >= 12 && hour <= 23) { return "PM"; }
-	else { return nullptr; }
-}
-struct interval
-{
-	short max;
-	short elapsed;
-	void (*callback)() = nullptr;
-	bool tick() {
-		if (elapsed >= max) {
-			elapsed = 0;
-			return true;
-		}
-		elapsed++;
-		return false;
-	}
-	interval(short max) { this->max = max; };
-};
 
-
-CellRtcDateTime epochToDatetime(time_t epoch) {
+CellRtcDateTime _epochToDatetime(time_t epoch) {
 	const int SECONDS_IN_A_MINUTE = 60;
 	//const int SECONDS_IN_AN_HOUR = 3600;
 	//const int SECONDS_IN_A_DAY = 86400;
@@ -1106,7 +1012,7 @@ CellRtcDateTime epochToDatetime(time_t epoch) {
 			break;
 		}
 	}
-	int day = epoch + 1; 
+	int day = epoch + 1;
 	CellRtcDateTime date;
 	date.day = day;
 	date.hour = hours;
@@ -1209,29 +1115,11 @@ static float get_firmware_version(void)
 	char FW[8]; sys::sprintf(FW, "%02X", info.firmware_version);
 	return (float)(FW[0] & 0x0F) + val(FW + 2) * 0.00001f;
 }
-void print_byte(char* buffer, byte value) {
-	char lett[0x3];
-	if (value < 0x0A) {
-		s_snprintf(lett, 3, "0%x", value);
-	}
-	else {
-		s_snprintf(lett, 3, "%x", value);
-	}
-	_sys_strncpy(buffer, lett, 3);
 
-}
-
-
-
-template <class TYPE_A>
-inline bool is(TYPE_A a, TYPE_A b) {
-	return a == b;
-}
-
-int get_address(void* foo) {
+int _saddressof(void* foo) {
 	return reinterpret_cast<int>(&foo);
 }
-std::string createUserIdString(int userId) {
+std::string _uid2str(int userId) {
 	char base_[9];
 	std::fill(base_, &base_[8], '0');
 	base_[9] = 0;
@@ -1243,7 +1131,7 @@ std::string createUserIdString(int userId) {
 
 	return base_;
 }
-char* strcat2(char* destination, const char* source) {
+char* _strcat2(char* destination, const char* source) {
 	char* result = destination;
 
 	while (*destination != '\0') {
@@ -1268,9 +1156,6 @@ char* format(const char* format, Arguments... s) {
 	s_snprintf(buff, buffSz, format, s...);
 	return buff;
 }
-short ctoi(char v) {
-	return v - '0';
-}
 unsigned char hexCharToNibble(char c) {
 	if (c >= '0' && c <= '9') {
 		return c - '0';
@@ -1293,7 +1178,7 @@ unsigned int hexToUInt(const char* hexString) {
 	}
 	return result;
 }
-int atoint(const char* str) {
+int _satoi(const char* str) {
 	int result = 0;
 	int sign = 1;
 	int i = 0;
@@ -1314,17 +1199,19 @@ int atoint(const char* str) {
 
 	return sign * result;
 }
-void hexstr_to_rgb(const char* hexString, int& r, int& g, int& b) {
+void hexs2rgb(const char* hexString, int& r, int& g, int& b) {
 	unsigned int hexValue = hexToUInt(hexString);
 	r = (hexValue >> 16) & 0xFF;
 	g = (hexValue >> 8) & 0xFF;
 	b = hexValue & 0xFF;
 }
-int is_char_integer(int c) {
+// Check if a character is a digit (0-9)
+int _isnumc(int c) {
 	if (c >= '0' && c <= '9')
 		return true;
 	return false;
 }
+
 int length(char* s) {
 	int len = 0;
 	while (*s != 0) {
@@ -1333,27 +1220,21 @@ int length(char* s) {
 	}
 	return len;
 }
-double min(double a, double b) {
-	return a > b ? b : b < a ? a : b;
-}
+double _min(double a, double b) { return a > b ? b : b < a ? a : b; }
 
-double max(double a, double b) {
-	return a > b ? a : b > a ? b : a;
-}
-void* zero(void* ptr, size_t sz) {
+double _max(double a, double b) { return a > b ? a : b > a ? b : a; }
+void* _memclr(void* ptr, size_t sz) {
 	return (void*)_sys_memset(ptr, 0, sz);
 }
 
-void* zero(const void* ptr, size_t sz) {
-	return (void*)_sys_memset((void*)ptr, 0, sz);
-}
+void* zero(const void* ptr, size_t sz) { return (void*)_sys_memset((void*)ptr, 0, sz); }
 
 char* zero(char* ptr) {
 	return (char*)_sys_memset(ptr, 0, _sys_strlen(ptr));
 
 }
-
-bool str_remove_word(char* str, const char* wordToRemove) {
+// Remove the first occurrence of a word from a string
+bool _strwrem(char* str, const char* wordToRemove) {
 	bool f = false;
 	while (*str) {
 		const char* wordStart = str;
@@ -1366,14 +1247,15 @@ bool str_remove_word(char* str, const char* wordToRemove) {
 			while (*wordStart) {
 				*str++ = *wordStart++;
 			}
-			*str = '\0'; 
+			*str = '\0';
 			return true;
 		}
 		++str;
 	}
 	return f;
 }
-bool str_equals(const char* a, const char* b) {
+
+bool _sequals2(const char* a, const char* b) {
 	while (*a && (*a == *b)) {
 		a++;
 		b++;
@@ -1381,7 +1263,7 @@ bool str_equals(const char* a, const char* b) {
 	return *a == *b;
 
 }
-bool str_contain(const char* str, const char* word) {
+bool _scontains(const char* str, const char* word) {
 	while (*str != '\0') {
 		const char* tempStr = str;
 		const char* tempWord = word;
@@ -1398,14 +1280,13 @@ bool str_contain(const char* str, const char* word) {
 	}
 	return false;
 }
-bool is_char_letter(int c)
+bool _iscalpha(int c)
 {
 	if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
 		return true;
 	return false;
 }
-
-char* strstr_custom(const char* haystack, const char* needle) {
+char* _strstr(const char* haystack, const char* needle) {
 	while (*haystack != '\0') {
 		const char* h = haystack;
 		const char* n = needle;
@@ -1416,28 +1297,29 @@ char* strstr_custom(const char* haystack, const char* needle) {
 		}
 
 		if (*n == '\0') {
-			return (char*)haystack;  // Found the needle in haystack
+			return (char*)haystack;
 		}
 
 		haystack++;
 	}
 
-	return NULL;  // Needle not found in haystack
+	return NULL;
 }
-
-size_t str_index_of_ph(const char* haystack, const char* target) {
-	char* found = strstr_custom(haystack, target);
+// Find the index of the first occurrence of a substring in a string
+size_t _sfinds(const char* haystack, const char* target) {
+	char* found = _strstr(haystack, target);
 
 	if (found == NULL) {
-		return (size_t)-1;  
+		return (size_t)-1;
 	}
 
 	return found - haystack;
 }
 
-char* str_extract_sub(const char* str, int start, int length) {
+// Extract a substring from a string starting at a given index and with a specified length
+char* _substrnw(const char* str, int start, int length) {
 	if (str == nullptr || start < 0 || length < 0) {
-		return nullptr; 
+		return nullptr;
 	}
 	int originalLength = 0;
 	const char* temp = str;
@@ -1446,10 +1328,10 @@ char* str_extract_sub(const char* str, int start, int length) {
 		++temp;
 	}
 	if (start >= originalLength) {
-		return nullptr;  
+		return nullptr;
 	}
 	int actualLength = std::min(length, originalLength - start);
-	char* substring = new char[actualLength + 1]; 
+	char* substring = new char[actualLength + 1];
 	for (int i = 0; i < actualLength; ++i) {
 		substring[i] = str[start + i];
 	}
@@ -1457,24 +1339,25 @@ char* str_extract_sub(const char* str, int start, int length) {
 
 	return substring;
 }
-int str_index_of(const char* str, char target) {
+// Find the index of the first occurrence of a character in a string
+int _sfindc(const char* str, char target) {
 	if (str == nullptr) {
-		return -1;  
+		return -1;
 	}
-	const char* tempStr = str; 
+	const char* tempStr = str;
 	int index = 0;
 	while (*tempStr != '\0') {
 		if (*tempStr == target) {
-			return index;  
+			return index;
 		}
 
 		++tempStr;
 		++index;
 	}
 
-	return -1;  
+	return -1;
 }
-int str_compare(const char* str1, const char* str2)
+int _strcmp(const char* str1, const char* str2)
 {
 	int diff = -1;
 
@@ -1488,12 +1371,9 @@ int str_compare(const char* str1, const char* str2)
 
 	return diff;
 }
-bool haves_same_path(const char* filepath, const char* is) {
-	return sys::strncmp(is, filepath, _sys_strlen(is)) == 0;
-}
 
 template<typename R, typename... Arguments>
-inline R Call2(long long function, Arguments... args)
+inline R _cast_call(long long function, Arguments... args)
 {
 	R(*func)(Arguments...) = reinterpret_cast<R(*)(Arguments...)>(function);
 	return func(args...);
@@ -1504,7 +1384,7 @@ template<typename R, typename... Arguments> inline R Call(long long function, Ar
 	R(*temp)(Arguments...) = (R(*)(Arguments...)) & toc_t;
 	return temp(args...);
 }
-template<typename R, typename... Arguments> inline R Call2(uint toc, long long function, Arguments... args)
+template<typename R, typename... Arguments> inline R _cast_call(uint toc, long long function, Arguments... args)
 {
 	int toc_t[2] = { function,  toc };
 	R(*temp)(Arguments...) = (R(*)(Arguments...)) & toc_t;
@@ -1516,14 +1396,14 @@ int CallInt(uintptr_t address, Instance* thisInst) {
 	return Call<int>(address, (uint)thisInst);
 }
 template <typename...arg>
-size_t printfw(wchar_t* buff, size_t sz, wchar_t* format, arg...s) {
+size_t printfw(wchar_t* buff, size_t sz, const wchar_t* format, arg...s) {
 	return Call<any>(0x00CB9BD8, buff, sz, format, s...);
 }
 template <typename R, class Instance, typename ...Args>
 R CallToInstance(uintptr_t address, Instance* thisInst, Args...s) {
 	return Call<R>(address, (uint)thisInst, s...);
 }
-int str_atoi(char* str){
+int _satoi2(char* str) {
 	int res = 0;
 	for (int i = 0; (*(str + i)) != '\0'; ++i)
 		if ((*(str + i)) != ' ') {
@@ -1533,16 +1413,19 @@ int str_atoi(char* str){
 }
 
 
-void get_temperature(uint32_t a, uint32_t* b)
-{
-	system_call_2(383, (uint64_t)(uint32_t)a, (uint64_t)(uint32_t)b);
+void _gtemp(uint32_t id, uint32_t* value) {
+	// i dont get why is being casted here. Is not needed in any way.
+
+	system_call_2(383, (uint64_t)(uint32_t)id, (uint64_t)(uint32_t)value);
 }
-int32_t sys_dbg_read_process_memory(uint64_t address, void* data, size_t size)
+// Low level memory read.
+int32_t _kernmread(uint64_t address, void* data, size_t size)
 {
 	system_call_4(904, (uint64_t)sys_process_getpid(), address, size, (uint64_t)data);
 	return_to_user_prog(int32_t);
 }
-int32_t sys_dbg_write_process_memory(uint64_t address, const void* data, size_t size)
+// Low level memory write.
+int32_t _kernmwrite(uint64_t address, const void* data, size_t size)
 {
 	system_call_4(905, (uint64_t)sys_process_getpid(), address, size, (uint64_t)data);
 	return_to_user_prog(int32_t);
@@ -1558,14 +1441,11 @@ int32_t sys_dbg_read_process_memory_ps3mapi(uint64_t ea, void* data, size_t size
 	return_to_user_prog(int32_t);
 }
 
-void WriteMemory(int address, char hex)
-{
-	*(int*)address = hex;
-}
-void sleep(usecond_t time)
-{
-	sys_timer_usleep(time * 1000);
-}
+void _set8(int address, char hex) { *(int*)address = hex; }
+
+// Sleep for a specified number of milliseconds
+void sleep(usecond_t time) { sys_timer_usleep(time * usecond_t(1000)); }
+
 int write_process(uint64_t ea, const void* data, size_t size)
 {
 	system_call_6(8, 0x7777, 0x32, (uint64_t)sys_process_getpid(), (uint64_t)ea, (uint64_t)data, (uint64_t)size);
@@ -1599,8 +1479,8 @@ void PatchInJump(int Address, int Destination) {
 }
 void UnHookFunctionStart(uint32_t functionStartAddress, uint32_t functionStub) {
 	uint32_t normalFunctionStub[4];
-	sys_dbg_read_process_memory(functionStub, normalFunctionStub, 0x10);
-	sys_dbg_write_process_memory(functionStartAddress, normalFunctionStub, 0x10);
+	_kernmread(functionStub, normalFunctionStub, 0x10);
+	_kernmwrite(functionStartAddress, normalFunctionStub, 0x10);
 
 	sys_dbg_read_process_memory_ps3mapi(functionStub, normalFunctionStub, 0x10);
 	sys_dbg_write_process_memory_ps3mapi(functionStartAddress, normalFunctionStub, 0x10);
@@ -1638,11 +1518,6 @@ void reverse(char s[])
 		s[j] = c;
 	}
 }
-void sys_sleep(uint64_t milliseconds)
-{
-	sys_timer_usleep(milliseconds * 1000);
-}
-
 bool isAlphanumeric(char ch) {
 	bool flag = ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'));
 	bool flag2 = ch != '-' && ch != '_';
@@ -1699,7 +1574,8 @@ long datetimeToTimestamp(int year, int month, int day, int hour, int minute, int
 
 	return milliseconds;
 }
-static void wcharToUtf8(wchar_t wchar, char* utf8Buffer, size_t bufferSize, size_t& written) {
+// Convert a wide character to UTF-8 encoding
+static void _swc2utf8(wchar_t wchar, char* utf8Buffer, size_t bufferSize, size_t& written) {
 	if (wchar <= 0x7F) { // 1 byte
 		if (written + 1 <= bufferSize) {
 			utf8Buffer[written++] = static_cast<char>(wchar);
@@ -1728,10 +1604,11 @@ static void wcharToUtf8(wchar_t wchar, char* utf8Buffer, size_t bufferSize, size
 	}
 }
 
-static void wcharStringToUtf8(const wchar_t* wcharString, char* utf8Buffer, size_t bufferSize) {
+// Convert a wide character string to UTF-8 encoding
+static void _sws2utf8s(const wchar_t* wcharString, char* utf8Buffer, size_t bufferSize) {
 	size_t written = 0;
 	for (; *wcharString != L'\0'; ++wcharString) {
-		wcharToUtf8(*wcharString, utf8Buffer, bufferSize, written);
+		_swc2utf8(*wcharString, utf8Buffer, bufferSize, written);
 	}
 	if (written < bufferSize) {
 		utf8Buffer[written] = '\0';
@@ -1739,7 +1616,7 @@ static void wcharStringToUtf8(const wchar_t* wcharString, char* utf8Buffer, size
 }
 
 // Inversed convertion UTF-8 → wchar_t
-static wchar_t utf8ToWchar(const char* utf8Char, size_t& bytesRead) {
+static wchar_t _sutf82wc(const char* utf8Char, size_t& bytesRead) {
 	uint8_t firstByte = static_cast<uint8_t>(utf8Char[0]);
 	wchar_t wchar = 0;
 	bytesRead = 1;
@@ -1763,23 +1640,40 @@ static wchar_t utf8ToWchar(const char* utf8Char, size_t& bytesRead) {
 		bytesRead = 4;
 	}
 	else {
-		return L'?'; 
+		return L'?';
 	}
 
 	return wchar;
 }
-
-static void utf8ToWcharString(const char* utf8String, wchar_t* wcharBuffer, size_t wcharBufferSize) {
+// Convert a UTF-8 string to a wide character string
+static void _sutf8s2wcs(const char* utf8String, wchar_t* wcharBuffer, size_t wcharBufferSize) {
 	size_t bytesRead = 0;
 	size_t wcharIndex = 0;
 
 	while (*utf8String != '\0' && wcharIndex < wcharBufferSize - 1) {
-		wcharBuffer[wcharIndex++] = utf8ToWchar(utf8String, bytesRead);
+		wcharBuffer[wcharIndex++] = _sutf82wc(utf8String, bytesRead);
 		utf8String += bytesRead;
 	}
 
 	wcharBuffer[wcharIndex] = L'\0'; // Agregar terminador
 }
+// Patch a branch instruction to jump to a function
+void _sbranch(uint addr, void* functionBase, bool link = false) {
+
+	// functionBase is name.
+	// expresion equivalent to his OPD entry in module.
+
+	uint32_t* target = (uint32_t*)addr; // <--
+	uint32_t jmp = *(uint*)functionBase;
+	uint32_t offset = jmp - (uint32_t)target;
+	if (offset & 0x3) offset &= ~0x3;
+	*target = (0x48000000 | (offset & 0x03FFFFFC)) | (link ? 1 : 0);
+	__dcbst(target);
+	__sync();
+	__isync();
+
+}
+
 void patcher(int Address, int Destination, bool Linked)
 {
 	int FuncBytes[4];
@@ -1795,25 +1689,26 @@ void patcher(int Address, int Destination, bool Linked)
 	sys_dbg_memcpy((void*)Address, FuncBytes, 4 * 4);
 }
 void hookfunction(uint32_t address, uint32_t patchedfunc, uint32_t patchstub, ...) {
-	//ps3_writelineF("hook %x -> %x, %x, \"%s\"", functionStartAddress, newFunction, functionStub, id);
+
 	uint32_t normalFunctionStub[8], hookFunctionStub[4];
 	sys_dbg_read_process_memory_ps3mapi(address, normalFunctionStub, 0x10);
-	sys_dbg_read_process_memory(address, normalFunctionStub, 0x10);
+	_kernmread(address, normalFunctionStub, 0x10);
 	normalFunctionStub[4] = 0x3D600000 + ((address + 0x10 >> 16) & 0xFFFF);
 	normalFunctionStub[5] = 0x616B0000 + (address + 0x10 & 0xFFFF);
 	normalFunctionStub[6] = 0x7D6903A6;
 	normalFunctionStub[7] = 0x4E800420;
 	sys_dbg_write_process_memory_ps3mapi(patchstub, normalFunctionStub, 0x20);
-	sys_dbg_write_process_memory(patchstub, normalFunctionStub, 0x20);
+	_kernmwrite(patchstub, normalFunctionStub, 0x20);
 	hookFunctionStub[0] = 0x3D600000 + ((patchedfunc >> 16) & 0xFFFF);
 	hookFunctionStub[1] = 0x616B0000 + (patchedfunc & 0xFFFF);
 	hookFunctionStub[2] = 0x7D6903A6;
 	hookFunctionStub[3] = 0x4E800420;
 	sys_dbg_write_process_memory_ps3mapi(address, hookFunctionStub, 0x10);
-	sys_dbg_write_process_memory(address, hookFunctionStub, 0x10);
+	_kernmwrite(address, hookFunctionStub, 0x10);
 
 	HOOK_COUNT++;
 }
+
 void hookfunction2(uint32_t address, uint32_t patchedfunc, uint32_t patchstub, ...) {
 	//ps3_writelineF("hook %x -> %x, %x, \"%s\"", functionStartAddress, newFunction, functionStub, id);
 	uint32_t normalFunctionStub[8], hookFunctionStub[4];
@@ -1831,144 +1726,33 @@ void hookfunction2(uint32_t address, uint32_t patchedfunc, uint32_t patchstub, .
 
 	HOOK_COUNT++;
 }
-struct stub_t {
-	uint32_t address;
-	uint32_t function_stub[8];
-
-	void restore() {
-		sys::memcpy((void*)address, function_stub, 32);
-	}
-};
 template<typename T, typename T2>
 void hookfunction(uint32_t address, T jumpFunc, T2 retFunc) {
-	uint space = (uint) * (int**)(retFunc);
+	uint space = (uint) * (int**)(retFunc); // opd reinterpret.
 	uint jump_ = (uint) * (int**)(jumpFunc);
 
-	stub_t t;
-	//ps3_writelineF("hook %x -> %x, %x, \"%s\"", functionStartAddress, newFunction, functionStub, id);
 	uint32_t normalFunctionStub[8], hookFunctionStub[4];
 	sys_dbg_read_process_memory_ps3mapi(address, normalFunctionStub, 0x10);
-	sys_dbg_read_process_memory(address, normalFunctionStub, 0x10);
-
-	t.address = address;
-	sys::memcpy(t.function_stub, normalFunctionStub, 32);
+	_kernmread(address, normalFunctionStub, 0x10);
 
 	normalFunctionStub[4] = 0x3D600000 + ((address + 0x10 >> 16) & 0xFFFF);
 	normalFunctionStub[5] = 0x616B0000 + (address + 0x10 & 0xFFFF);
 	normalFunctionStub[6] = 0x7D6903A6;
 	normalFunctionStub[7] = 0x4E800420;
 	sys_dbg_write_process_memory_ps3mapi(space, normalFunctionStub, 0x20);
-	sys_dbg_write_process_memory(space, normalFunctionStub, 0x20);
-
-
-	hookFunctionStub[0] = 0x3D600000 + ((jump_ >> 16) & 0xFFFF);
-	hookFunctionStub[1] = 0x616B0000 + (jump_ & 0xFFFF);
-	hookFunctionStub[2] = 0x7D6903A6;
-	hookFunctionStub[3] = 0x4E800420;
-	sys_dbg_write_process_memory_ps3mapi(address, hookFunctionStub, 0x10);
-	sys_dbg_write_process_memory(address, hookFunctionStub, 0x10);
-
-}
-template<typename R>
-stub_t hookfunction2(uint32_t address, R(*jump), R(*return_space)) {
-	uint32_t space = (uint32_t) * (int**)(return_space);
-	uint32_t jump_ = (uint32_t) * (int**)(jump);
-
-	stub_t t;
-	//ps3_writelineF("hook %x -> %x, %x, \"%s\"", functionStartAddress, newFunction, functionStub, id);
-	uint32_t normalFunctionStub[8], hookFunctionStub[4];
-	sys_dbg_read_process_memory_ps3mapi(address, normalFunctionStub, 0x10);
-	sys_dbg_read_process_memory(address, normalFunctionStub, 0x10);
-
-	t.address = address;
-	sys::memcpy(t.function_stub, normalFunctionStub, 32);
-
-	normalFunctionStub[4] = 0x3D600000 + ((address + 0x10 >> 16) & 0xFFFF);
-	normalFunctionStub[5] = 0x616B0000 + (address + 0x10 & 0xFFFF);
-	normalFunctionStub[6] = 0x7D6903A6;
-	normalFunctionStub[7] = 0x4E800420;
-	sys_dbg_write_process_memory_ps3mapi(space, normalFunctionStub, 0x20);
-	sys_dbg_write_process_memory(space, normalFunctionStub, 0x20);
-
+	_kernmwrite(space, normalFunctionStub, 0x20);
 
 	hookFunctionStub[0] = 0x3D600000 + ((jump_ >> 16) & 0xFFFF);
 	hookFunctionStub[1] = 0x616B0000 + (jump_ & 0xFFFF);
 	hookFunctionStub[2] = 0x7D6903A6;
 	hookFunctionStub[3] = 0x4E800420;
 	sys_dbg_write_process_memory_ps3mapi(address, hookFunctionStub, 0x10);
-	sys_dbg_write_process_memory(address, hookFunctionStub, 0x10);
+	_kernmwrite(address, hookFunctionStub, 0x10);
 
-	return t;
 }
 
-
-namespace vector3_parse {
-
-	int v3atoi(const char* str) {
-		int result = 0;
-		int sign = 1;
-		if (*str == '-') {
-			sign = -1;
-			++str;
-		}
-		while (*str >= '0' && *str <= '9') {
-			result = result * 10 + (*str - '0');
-			++str;
-		}
-
-		return sign * result;
-	}
-	int customIsDigit(char c) {
-		return (c >= '0' && c <= '9');
-	}
-	int customIsSpace(char c) {
-		return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
-	}
-	char* customStrncpy(char* dest, const char* src, size_t n) {
-		size_t i;
-		for (i = 0; i < n && src[i] != '\0'; ++i) {
-			dest[i] = src[i];
-		}
-		for (; i < n; ++i) {
-			dest[i] = '\0';
-		}
-		return dest;
-	}
-	int parseVector3(const char* vectorStr, int* x, int* y, int* z) {
-
-		*x = *y = *z = 0;
-		while (*vectorStr && !customIsDigit(*vectorStr) && *vectorStr != '-') {
-			++vectorStr;
-		}
-		if (*vectorStr == '\0') {
-			return 0;
-		}
-		*x = v3atoi(vectorStr);
-		while (*vectorStr && (customIsDigit(*vectorStr) || *vectorStr == '-')) {
-			++vectorStr;
-		}
-		while (*vectorStr && !customIsDigit(*vectorStr) && *vectorStr != '-') {
-			++vectorStr;
-		}
-		if (*vectorStr == '\0') {
-			return 0;
-		}
-		*y = v3atoi(vectorStr);
-		while (*vectorStr && (customIsDigit(*vectorStr) || *vectorStr == '-')) {
-			++vectorStr;
-		}
-		while (*vectorStr && !customIsDigit(*vectorStr) && *vectorStr != '-') {
-			++vectorStr;
-		}
-		if (*vectorStr == '\0') {
-			return 0;
-		}
-		*z = v3atoi(vectorStr);
-
-		return 1;
-	}
-}
-uint32_t take(void* f) {
+// dummy function.
+uint32_t _addr(void* f) {
 	return *(uint_ptr)f;
 }
 int guessfix_storage_for_mc(int addr)
@@ -2011,41 +1795,11 @@ int guessfix_storage_for_mc(int addr)
 			return 0x000101C0;
 	}
 }
-bool strcont(char* w1, char* w2)
-{
-	int i = 0;
-	int j = 0;
-	if (_sys_strlen(w1) == 0 || _sys_strlen(w2) == 0)
-	{
-		return false;
-	}
-	while (w1[i] != '\0')
-	{
-		if (w1[i] == w2[j])
-		{
-			while (w1[i] == w2[j] && w2[j] != '\0')
-			{
-				j++;
-				i++;
-			}
-
-			if (w2[j] == '\0')
-			{
-				return true;
-			}
-			j = 0;
-		}
-
-		i++;
-	}
-
-	return false;
-}
 static const char* ToString(bool boolean) {
 	return boolean ? "true" : "false";
 }
 
-double s_iterative_sqrt(double x) {
+double _sisqrt(double x) {
 	if (x <= 0.0f)
 		return 0.0f;
 	double result = x;
@@ -2061,13 +1815,14 @@ double s_iterative_sqrt(double x) {
 	result = 0.5f * (result + x / result);
 	return result;
 }
-float s_iterative_sqrt(float x) {
-	return s_iterative_sqrt((double)x);
+float _sisqrt(float x) {
+	return _sisqrt((double)x);
 }
 
-char* interaddrToStr(unsigned int ip) {
+// Convert an unsigned integer IP address to a string representation
+char* _sip2strnw(unsigned int ip) {
 	char* ipString = new char[16];
-sys::sprintf(ipString, "%u.%u.%u.%u",
+	sys::sprintf(ipString, "%u.%u.%u.%u",
 		(ip >> 24) & 0xFF,
 		(ip >> 16) & 0xFF,
 		(ip >> 8) & 0xFF,
@@ -2075,19 +1830,18 @@ sys::sprintf(ipString, "%u.%u.%u.%u",
 
 	return ipString;
 }
-uint64_t u_static_rand_seed;
-int s_random() {
+uint64_t u_randseed;
+
+// Generate a random number using a linear congruential generator (LCG)
+int _slcg() {
 	uint64_t a = 1664525343;
 	uint64_t c = 1013904223;
-	u_static_rand_seed = a * u_static_rand_seed + c;
-	return static_cast<int>(u_static_rand_seed % (RAND_MAX + 1));
+	u_randseed = a * u_randseed + c;
+	return static_cast<int>(u_randseed % (RAND_MAX + 1));
 }
 
 #pragma region OVERRIDE_NEW
-void* operator new(std::size_t size)
-{
-	return _sys_malloc(size);
-}
+void* operator new(std::size_t size) { return _sys_malloc(size); }
 void* operator new(std::size_t size, const _STD nothrow_t&) //_THROW0() // allocate or return null pointer
 {
 	return _sys_malloc(size);
@@ -2185,8 +1939,8 @@ uint32_t _sys_bitwise_mix(uint32_t input) {
 	return input;
 }
 
-
-uint getStrUid(char* a)
+// Generate a unique identifier based on a string input
+uint _suid(const char* a)
 {
 	uint r = 1;
 	byte b = 1;
@@ -2202,16 +1956,20 @@ uint getStrUid(char* a)
 
 	return r;
 }
+
+// Get the size of an explicitly known array
 template <std::size_t size, typename Array>
-uint s_explicit_aray_size(Array(&array)[size]) {
+uint _mgic_sizeof(Array(&array)[size]) {
 	return size;
 }
-void asm_nop_until(uint32_t sadr, int count) {
+// Fill a memory region with NOP instructions
+void _snop_itions(uint32_t sadr, int count) {
 	auto ins = (uint*)sadr;
 	for (int i = 0; i < count; i++)
 		ins[i] = 0x60000000;
 }
-void asm_nop_until_adr(uint32_t sadr, uint adr) {
+// Fill a memory region with NOP instructions until a specified address
+void _snop_itions2adr(uint32_t sadr, uint adr) {
 	auto ins = (uint*)sadr;
 	for (; ins < (uint*)adr; ins++) {
 		*ins = 0x60000000;
@@ -2220,22 +1978,22 @@ void asm_nop_until_adr(uint32_t sadr, uint adr) {
 }
 
 
-bool s_is_digit(char c) {
+bool _sisnumc(char c) {
 	return c >= '0' && c <= '9';
 }
 
-bool s_is_space(char c) {
+bool _sisblank(char c) {
 	return c == ' ' || c == '\t' || c == '\n';
 }
 
-bool s_is_gap(char c) {
+bool _siscomma(char c) {
 	return c == ',';
 }
 
-bool s_is_a_dot(char c) {
+bool _sisdot(char c) {
 	return c == '.';
 }
-float s_atof(const char* inicio, const char* fin, char decimalGap = ',') {
+float _satof(const char* inicio, const char* fin, char decimalGap = ',') {
 	float resultado = 0.0f;
 	float factor = 1.0f;
 	bool parteDecimal = false;
@@ -2247,10 +2005,10 @@ float s_atof(const char* inicio, const char* fin, char decimalGap = ',') {
 	}
 
 	for (const char* p = inicio; p != fin; ++p) {
-		if (s_is_a_dot(*p) || (*p) == decimalGap) {
+		if (_sisdot(*p) || (*p) == decimalGap) {
 			parteDecimal = true;
 		}
-		else if (s_is_digit(*p)) {
+		else if (_sisnumc(*p)) {
 			if (!parteDecimal) {
 				resultado = resultado * 10.0f + (*p - '0');
 			}
@@ -2266,7 +2024,7 @@ float s_atof(const char* inicio, const char* fin, char decimalGap = ',') {
 
 static std::string ToString(const std::wstring& r) {
 	char buffer[1024]{ 0 };
-	wcharStringToUtf8(r.c_str(), buffer, 1024);
+	_sws2utf8s(r.c_str(), buffer, 1024);
 	sys::memset(buffer, 0, 1024);
 	return buffer;
 }
@@ -2275,11 +2033,11 @@ size_t s_printfcat(char* buffer, wchar_t* format, arg...s) {
 	wchar bufferw[256]{ 0 };
 	char bufferc[256]{ 0 };
 	printfw(bufferw, 256, format, s...);
-	wcharStringToUtf8(bufferw, bufferc, 256);
+	_sws2utf8s(bufferw, bufferc, 256);
 	std::strcat(buffer, bufferc);
 	return sys::strlen(buffer);
 }
-void _internal_assert(bool c, int16_t line, const char* fn, const char* conditionStr) {
+void _trapped_assert(bool c, int16_t line, const char* fn, const char* conditionStr) {
 	if (!c) {
 		console_indent('=', 32);
 		console_line("Assertion failed.");
@@ -2292,10 +2050,10 @@ void _internal_assert(bool c, int16_t line, const char* fn, const char* conditio
 namespace ps3 {
 
 	template <typename X, int X2>
-	void WriteBytes(uint32_t addr, X(&varr)[X2], ...) {
+	void _swrite_block(uint32_t addr, X(&varr)[X2], ...) {
 		_sys_memcpy((void*)addr, varr, sizeof(X) * X2);
 	}
-	void WriteByte(uint32_t addr, byte x) {
+	void _write8(uint32_t addr, byte x) {
 		*(byte*)addr = x;
 	}
 }
@@ -2309,7 +2067,7 @@ namespace ps3 {
 		__nop();\
 	}\
 void Patch_##name(){\
-		hookfunction(address, take(patcher_func), take(s##name));	\
+		hookfunction(address, _addr(patcher_func), _addr(s##name));	\
 }
 
 
@@ -2322,7 +2080,7 @@ void Patch_##name(){\
 		__nop();\
 	}\
 void Patch_##name(){\
-		hookfunction2(address, take(patcher_func), take(s##name));	\
+		hookfunction2(address, _addr(patcher_func), _addr(s##name));	\
 }
 
 #define TRAP2(type, address, patcher_func) TRAP(type, address, patcher_func, patcher_func)

@@ -26,6 +26,7 @@ extern "C"
 	char* _sys_strrchr(char* str, int character);
 	int		_sys_tolower(int c);
 	int		_sys_toupper(int c);
+	int _sys_vsnprintf(char* buffer, size_t buf_size, const char* format, va_list arg);
 
 }
 namespace sys {
