@@ -1,0 +1,347 @@
+#pragma once
+#include "traits.h"
+#include "heap.h"
+#include "default_allocator.h"
+
+#ifndef __SYS_NEWX__
+#define _SYS_NEWX__
+#define newx(expression)  sys::newx::allocate<expression>(sys::default_allocator);
+#endif
+_SYS_NS
+
+class newx final {
+	friend handle;
+
+	/// <summary>
+	/// Allocates a control block for an object of type _Ty and returns a typed_handle that manages it. This overload is enabled only for non-array types.
+	/// </summary>
+	/// <typeparam name="_Ty">Type of the object to allocate. Must not be an array type; the function returns a handle for the decayed type (decay<_Ty>::type).</typeparam>
+	/// <param name="allocator">Pointer to a sys::alloc allocator used to allocate the control block for the object.</param>
+	/// <param name="shared">If true, the control block is created for shared ownership semantics; otherwise for non-shared ownership.</param>
+	/// <returns>A typed_handle managing the allocated object's control block (typed_handle<decay<_Ty>::type>).</returns>
+	template<typename _Ty>
+	static typename sys::enable_if_t<
+		!sys::is_array<_Ty>::value,
+		typed_handle<typename sys::decay<_Ty>::type>
+	>
+		allocate_object(sys::alloc* allocator, bool shared)
+	{
+		using type = typename sys::decay<_Ty>::type;
+
+		sys::detail::_control_block* block =
+			sys::detail::factory::allocate_type(
+				sizeof(type),
+				alignof(type),
+				allocator,
+				&sys::typed_destructor<type>,
+				shared
+			);
+
+		return typed_handle<type>(block);
+	}
+	/// <summary>
+	/// Allocates raw storage for an array of elements of the specified type using the provided allocator and returns a control block for the allocation.
+	/// </summary>
+	/// <typeparam name="Type">Element type for the array (intended for fundamental or trivially constructible types).</typeparam>
+	/// <param name="allocator">Pointer to the allocator to use for the allocation (sys::alloc*).</param>
+	/// <param name="count">Number of elements of type Type to allocate.</param>
+	/// <returns>A pointer to a sys::detail::_control_block representing the allocated memory, or nullptr if the allocation fails.</returns>
+	template<typename Type>
+	static sys::detail::_control_block*
+		new_fundamental_array(sys::alloc* allocator, size_t count, bool shared)
+	{
+		return sys::detail::factory::allocate(
+			count * sizeof(Type),
+			alignof(Type),
+			allocator,
+			shared
+		);
+	}
+
+	template<typename Type>
+	static sys::detail::_control_block*
+		new_typed_array(sys::alloc* allocator, size_t count, bool shared)
+	{
+		return sys::detail::factory::allocate_type_array(count, sizeof(Type), alignof(Type), allocator,
+			&typed_destructor<Type>, shared);
+	}
+
+
+	/// FUNDAMENTAL ARRAY
+
+	template<typename _Array>
+	static inline
+		sys::enable_if_t<
+		sys::is_array<_Array>::value&& sys::is_fundamental<typename sys::remove_extent<_Array>::type>::value,
+		handle
+		>
+		allocate_array(sys::alloc* allocator, bool shared)
+	{
+		using type =
+			typename sys::remove_extent<_Array>::type;
+
+		return handle(
+			new_fundamental_array<type>(
+				allocator,
+				sys::extent<_Array>::value,
+				shared
+			)
+		);
+	}
+
+	// NON FUNDAMENTAL ARRAY.
+	template<typename _Array>
+	static inline
+		sys::enable_if_t<
+		sys::is_array<_Array>::value && (!sys::is_fundamental<typename sys::remove_extent<_Array>::type>::value),
+		handle
+		>
+		allocate_array(sys::alloc* allocator, bool shared)
+	{
+		using type =
+			typename sys::remove_extent<_Array>::type;
+
+		return typed_handle<type>(
+			new_typed_array<type>(
+				allocator,
+				sys::extent<_Array>::value,
+				shared
+			)
+		);
+	}
+
+	/// ARRAYS WITH INLINE PARAMETER.
+
+
+
+	/// FUNDAMENTAL ARRAY
+
+	template<typename _Array>
+	static inline
+		sys::enable_if_t<
+		sys::is_array<_Array>::value&& sys::is_fundamental<typename sys::remove_extent<_Array>::type>::value,
+		handle
+		>
+		allocate_array(sys::alloc* allocator, bool shared, size_t count)
+	{
+		using type =
+			typename sys::remove_extent<_Array>::type;
+
+		return handle(
+			new_fundamental_array<type>(
+				allocator,
+				count,
+				shared
+			)
+		);
+	}
+
+	// NON FUNDAMENTAL ARRAY.
+	template<typename _Array>
+	static inline
+		sys::enable_if_t<
+		sys::is_array<_Array>::value && (!sys::is_fundamental<typename sys::remove_extent<_Array>::type>::value),
+		handle
+		>
+		allocate_array(sys::alloc* allocator, bool shared, size_t count)
+	{
+		using type =
+			typename sys::remove_extent<_Array>::type;
+
+		return typed_handle<type>(
+			new_typed_array<type>(
+				allocator,
+				count,
+				shared
+			)
+		);
+	}
+
+public:
+
+
+
+#if __UNUSED // See new_shared macro
+	// Shared field/byte array inline size.
+
+
+	/// <summary>
+	/// Allocates shared storage for an array type and returns a handle to it. This overload is enabled only when the template parameter is an array type.
+	/// </summary>
+	/// <typeparam name="_Ty">The array type to allocate (function is enabled only when _Ty is an array type).</typeparam>
+	/// <param name="allocator">Pointer to an allocator used to perform the allocation.</param>
+	/// <param name="size">Number of elements (array length) to allocate.</param>
+	/// <returns>A handle representing the allocated array storage.</returns>
+	template<typename _Ty>
+	static sys::enable_if_t<sys::is_array<_Ty>::value, handle>
+		allocate_shared(sys::alloc* allocator, size_t size) {
+
+		// select fundamental or not
+		return allocate_array<_Ty>(allocator, true, size);
+	}
+
+
+
+	// Shared non-fundamental object.
+
+	/// <summary>
+	/// Allocates and returns a typed_handle that manages a newly created object of type sys::decay<_Ty>::type using the provided allocator. This overload is enabled only for non-array, non-fundamental types.
+	/// </summary>
+	/// <typeparam name="_Ty">The type of the object to allocate. Must not be an array type and, after removing all extents, must not be a fundamental type. The returned handle refers to sys::decay<_Ty>::type.</typeparam>
+	/// <param name="allocator">Pointer to a sys::alloc used to allocate memory for the object.</param>
+	/// <returns>A typed_handle<typename sys::decay<_Ty>::type> that manages (owns) the newly allocated object.</returns>
+	template<typename _Ty>
+	static typename sys::enable_if_t<
+		(!sys::is_array<_Ty>::value) && (!sys::is_fundamental<typename sys::remove_all_extents<_Ty>::type>::value),
+		typed_handle<typename sys::decay<_Ty>::type>
+	> allocate_shared(sys::alloc* allocator)
+	{
+		return allocate_object(allocator, true);
+	}
+
+	// Shared field/byte array
+
+	/// <summary>
+	/// Allocates and returns a shared handle for an array type using the given allocator. This overload is enabled only when _Ty is an array type.
+	/// </summary>
+	/// <typeparam name="_Ty">The array type to allocate. The function participates in overload resolution only if sys::is_array<_Ty>::value is true.</typeparam>
+	/// <param name="allocator">Pointer to the allocator to use for the allocation.</param>
+	/// <returns>A handle referring to the newly allocated shared array.</returns>
+	template<typename _Ty>
+	static sys::enable_if_t<sys::is_array<_Ty>::value, handle>
+		allocate_shared(sys::alloc* allocator) {
+
+		// select fundamental or not
+		return allocate_array<_Ty>(allocator, true);
+	}
+#endif
+
+	// Allocate field/byte array inline size
+
+	template<typename _Ty>
+	struct is_typed : bool_constant<(!sys::is_array<_Ty>::value)  && (!sys::is_fundamental<typename sys::remove_all_extents<_Ty>::type>::value)>
+	{
+
+	};
+
+	/// <summary>
+	/// Allocates an array of type _Ty using the provided allocator. This overload is enabled only when _Ty is an array type.
+	/// </summary>
+	/// <typeparam name="_Ty">The array type to allocate. The function participates in overload resolution only if sys::is_array<_Ty>::value is true.</typeparam>
+	/// <param name="allocator">Pointer to the allocator used to perform the allocation.</param>
+	/// <param name="size">Number of elements (array length) to allocate.</param>
+	/// <returns>A handle that refers to the allocated array.</returns>
+	template<typename _Ty>
+	static sys::enable_if_t<sys::is_array<_Ty>::value, handle>
+		allocate(sys::alloc* allocator, size_t size) {
+
+		// select fundamental or not
+		return allocate_array<_Ty>(allocator, false, size);
+	}
+
+
+	// Allocate field/byte array
+
+	/// <summary>
+	/// Allocates storage for an array type and returns a handle. This overload is enabled only when the template parameter _Ty is an array type.
+	/// </summary>
+	/// <typeparam name="_Ty">The array type to allocate. This function is enabled only if sys::is_array<_Ty>::value is true.</typeparam>
+	/// <param name="allocator">Pointer to an allocator object used to perform the allocation.</param>
+	/// <returns>A handle representing the allocated array. The function participates in overload resolution only for array types (_Ty).</returns>
+	template<typename _Ty>
+	static sys::enable_if_t<sys::is_array<_Ty>::value, handle>
+		allocate(sys::alloc* allocator) {
+
+		// select fundamental or not
+		return allocate_array<_Ty>(allocator, false);
+	}
+
+
+	// Allocate non-fundamental object
+
+	/// <summary>
+	/// Allocates a control block for an object of the decayed type _Ty and returns a typed_handle that manages it. This overload is enabled only when _Ty is not an array and the underlying type (after removing all extents) is not a fundamental type.
+	/// </summary>
+	/// <typeparam name="_Ty">Type of the object to allocate. The type is decayed (cv-qualifiers and references removed). SFINAE constraints: _Ty must not be an array, and remove_all_extents<_Ty>::type must not be a fundamental type.</typeparam>
+	/// <param name="allocator">Pointer to a sys::alloc used to perform the underlying memory allocation for the control block.</param>
+	/// <param name="shared">If true, allocate the control block as shared; if false, allocate a non-shared control block.</param>
+	/// <returns>A typed_handle managing the allocated control block for typename sys::decay<_Ty>::type (ownership/empty behavior depends on the allocator/factory implementation).</returns>
+	template<typename _Ty>
+	static typename sys::enable_if_t<
+		(!sys::is_array<_Ty>::value) && (!sys::is_fundamental<typename sys::remove_all_extents<_Ty>::type>::value),
+		typed_handle<typename sys::decay<_Ty>::type>
+	>
+		allocate(sys::alloc* allocator, bool shared)
+	{
+		using type = typename sys::decay<_Ty>::type;
+
+		sys::detail::_control_block* block =
+			sys::detail::factory::allocate_type(
+				sizeof(type),
+				alignof(type),
+				allocator,
+				&sys::typed_destructor<type>,
+				shared
+			);
+
+		unexpect(block == NULL);
+
+		return typed_handle<type>(block);
+	}
+
+	// Use T with no extends
+	// Expected output: fundametal* (e.g int[])
+	// use only at factories when scope has too much complex template inferencing and ICE is ocurring.
+	template <typename T>
+	static sys::handle factory_explicit_allocate_array(sys::alloc* alloca, size_t count) {
+		sys::detail::_control_block* block =
+			sys::detail::factory::allocate(
+				sizeof(T) * count,
+				alignof(T),
+				alloca,
+				false
+			);
+		return handle(block);
+	}
+	// Use T with no extends
+	// Expected output: class*
+	// use only at factories when scope has too much complex template inferencing and ICE is ocurring.
+	template <typename T>
+	static sys::typed_handle<T> factory_explicit_allocate_type(sys::alloc* alloca) {
+
+		sys::detail::_control_block* block =
+			sys::detail::factory::allocate_type(
+				sizeof(T),
+				alignof(T),
+				alloca,
+				&sys::typed_destructor<T>,
+				false
+			);
+
+		return typed_handle<T>(block);
+	}
+	// Use T with no extends
+	// Expected output: class[count] -> class*
+	// use only at factories when scope has too much complex template inferencing and ICE is ocurring.
+	template <typename T>
+	static sys::typed_handle<T> factory_explicit_allocate_type_array(sys::alloc* alloca, size_t count) {
+		sys::detail::_control_block* block =
+			sys::detail::factory::allocate_type_array(count,
+				sizeof(T),
+				alignof(T),
+				alloca,
+				&sys::typed_destructor<T>,
+				false
+			);
+
+		return typed_handle<T>(block);
+	}
+
+};
+template<typename T>
+unique_handle<T> new_unique() {
+	auto handle = sys::newx::allocate<T>(sys::default_allocator, false);
+	handle.activate();
+	return static_cast<unique_handle<T>&&>(handle);
+}
+_SYS_ENS
